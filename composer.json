@@ -11,5 +11,10 @@
             "name": "Constantin Miron",
             "email": "mc.reves@gmail.com"
         }
-    ]
+    ],
+    "autoload": {
+        "psr-4": {
+            "Val\\": "src/"
+        }
+    }
 }
