@@ -2,6 +2,8 @@
 
 namespace Val\Api;
 
+use Val\App\Config;
+
 Abstract Class Lang
 {
     // Cached lang code

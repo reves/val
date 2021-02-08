@@ -3,6 +3,7 @@
 namespace Val\Api;
 
 use MaxMind\Db\Reader;
+use Val\App\Config;
 
 Abstract Class Geolocation
 {

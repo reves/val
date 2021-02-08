@@ -8,7 +8,7 @@ namespace Val;
  * Usage example:
  * 
  *  <?php
- *  require 'path/to/val/.../src/Loader.php';
+ *  require '../vendor/autoload.php';
  *  Val\Loader::start(function() { echo 'Hello, World!'; });
  * 
  */
@@ -28,13 +28,12 @@ Abstract Class Loader
 
         date_default_timezone_set('UTC');
 
-        define('DIR_VAL_MODULES', __DIR__ . '/../modules');
         define('DIR_ROOT',      getcwd() . '/../');
         define('DIR_CONFIG',    DIR_ROOT . '/config');
         define('DIR_API',       DIR_ROOT . '/api');
         define('DIR_TEMPLATES', DIR_ROOT . '/templates');
 
-        require DIR_VAL_MODULES . '/MaxMind-DB-Reader-php/autoload.php';
+        require '../vendor/autoload.php';
         require 'App/Config.php';
         require 'App/CSRF.php';
         require 'App/JSON.php';
