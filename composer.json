@@ -1,0 +1,15 @@
+{
+    "name": "reves/val",
+    "description": "Backend PHP framework",
+    "type": "library",
+    "require": {
+        "php": ">=8.0",
+        "maxmind-db/reader": "^1.9"
+    },
+    "authors": [
+        {
+            "name": "Constantin Miron",
+            "email": "mc.reves@gmail.com"
+        }
+    ]
+}
