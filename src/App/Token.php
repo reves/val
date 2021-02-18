@@ -18,7 +18,7 @@ Abstract Class Token
     {
         $dataEncoded = JSON::encode($data);
 
-        return ($dataEncoded === null) ? null : Encryption::encrypt($dataEncoded);
+        return ($dataEncoded === null) ? null : Crypt::encrypt($dataEncoded);
     }
 
     /**
@@ -27,7 +27,7 @@ Abstract Class Token
      */
     public static function extract(string $token) : ?array
     {
-        $dataEncoded = Encryption::decrypt($token);
+        $dataEncoded = Crypt::decrypt($token);
 
         if ($dataEncoded === null) {
 

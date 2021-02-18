@@ -2,7 +2,7 @@
 
 namespace Val\App;
 
-Class HTTP
+Abstract Class HTTP
 {
     /**
      * Sends a GET request. Returns an array of JSON decoded data or null, in case of an 

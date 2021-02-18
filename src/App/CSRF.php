@@ -12,7 +12,7 @@ Abstract Class CSRF
     public static function init()
     {
         if (!Cookie::isSet(self::COOKIE_NAME))
-            Cookie::set(self::COOKIE_NAME, Encryption::encrypt(random_bytes(32)), ['httponly' => false, 'samesite' => 'Strict']);  
+            Cookie::set(self::COOKIE_NAME, Crypt::encrypt(random_bytes(32)), ['httponly' => false, 'samesite' => 'Strict']);  
     }
 
     /**
@@ -26,7 +26,7 @@ Abstract Class CSRF
         return (
             $cookie && 
             isset($_SERVER['HTTP_X_CSRF_TOKEN']) && 
-            Encryption::decrypt($cookie) &&
+            Crypt::decrypt($cookie) &&
             $_SERVER['HTTP_X_CSRF_TOKEN'] === $cookie
         );
     }

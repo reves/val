@@ -2,16 +2,19 @@
 
 namespace Val\App;
 
+use Val\App;
+
 Abstract Class Config
 {
     // Cached in-memory configurations (those that were requested earlier)
     protected static array $configs = [];
 
     /**
-     * Gets the configuration file specified by "method $name" and returns the config 
-     * field specified by "first argument $arguments[0]". If the configuration file does 
-     * not exist, returns null. If no argument was provided, returns an array of all the 
-     * config fields.
+     * Gets the configuration file specified by "static method $name" and returns the 
+     * value of the config field specified by "first argument $arguments[0]". If the 
+     * configuration file does not exist, returns null. If the config field does not 
+     * exist, throws an exception. If no argument was provided, returns an array of all 
+     * the config fields.
      * 
      * @throws \LogicException
      */
@@ -26,7 +29,7 @@ Abstract Class Config
 
         if (!array_key_exists($name, self::$configs)) {
 
-            $path = DIR_CONFIG . "/{$name}.config.php";
+            $path = App::$DIR_CONFIG . "/{$name}.php";
 
             if (!is_file($path)) {
                 
@@ -43,13 +46,7 @@ Abstract Class Config
 
         $field = strtolower($arguments[0]);
 
-        if (!isset(self::$configs[$name][$field]))
-            throw new \LogicException("The \"{$field}\" field is not set in the \"{$name}\" configuration.");
-
-        if (self::$configs[$name][$field] === '')
-            throw new \LogicException("The \"{$field}\" field value in the \"{$name}\" configuration is empty.");
-
-        return self::$configs[$name][$field];
+        return self::$configs[$name][$field] ?? null;
     }
     
 }

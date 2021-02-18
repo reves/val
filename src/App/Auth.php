@@ -2,51 +2,48 @@
 
 namespace Val\App;
 
-Class Auth
+Final Class Auth
 {
-    // Database module
-    protected Database $db;
+    protected static ?self $instance = null;
 
     // Authentication session data
-    protected ?array $session;
+    protected static ?array $session = null;
 
     /**
      * Identifies the authentication session cookie and tries to authenticate the user.
      */
-    public function __construct(Database $db)
+    protected function __construct()
     {
-        $this->db = $db;
-
         // Get the encrypted authentication session data from the cookie.
         if (Cookie::isSet(Config::account('auth_session_cookie_name'))) {
 
-            $this->session = Token::extract(Cookie::get(Config::account('auth_session_cookie_name')));
+            self::$session = Token::extract(Cookie::get(Config::account('auth_session_cookie_name')));
 
             // The authentication session data decrypted and decoded successfully.
-            if ($this->session !== null) {
+            if (self::$session !== null) {
 
                 // The authentication session did not expire yet.
-                if (!Token::expired($this->session['signedInAt'], Config::account('auth_session_ttl_days'), Token::EXPIRED_DAYS)) {
+                if (!Token::expired(self::$session['signedInAt'], Config::account('auth_session_ttl_days'), Token::EXPIRED_DAYS)) {
                 
-                    $this->db->prepare('SELECT EXISTS(SELECT 1 FROM val_auth_sessions WHERE Id = :sessionId) AS AuthSessionFound')
-                        ->bind(':sessionId', $this->session['sessionId']);
+                    DB::prepare('SELECT EXISTS(SELECT 1 FROM val_auth_sessions WHERE Id = :sessionId) AS AuthSessionFound')
+                        ->bind(':sessionId', self::$session['sessionId']);
 
                     // The authentication session record was found in the database.
-                    if ($this->db->single()['AuthSessionFound']) {
+                    if (DB::single()['AuthSessionFound']) {
 
                         $device = Device::get();
 
                         // The data of the current device matches the data of the device used for the authentication session initialization.
                         if (
-                            $this->session['device']['type'] === mb_substr($device['type'], 0, 63) &&
-                            $this->session['device']['platform'] ===  mb_substr($device['platform'], 0, 63) &&
-                            $this->session['device']['browser'] === mb_substr($device['browser'], 0, 63)
+                            self::$session['device']['type'] === mb_substr($device['type'], 0, 63) &&
+                            self::$session['device']['platform'] ===  mb_substr($device['platform'], 0, 63) &&
+                            self::$session['device']['browser'] === mb_substr($device['browser'], 0, 63)
                         ) {
 
                             // Update the authentication session.
-                            if (Token::expired($this->session['lastSeenAt'], Config::account('auth_session_update_minutes'), Token::EXPIRED_MINUTES)) {
+                            if (Token::expired(self::$session['lastSeenAt'], Config::account('auth_session_update_minutes'), Token::EXPIRED_MINUTES)) {
 
-                                $this->updateSession();
+                                self::updateSession();
 
                             }
                             
@@ -57,32 +54,37 @@ Class Auth
                 }
             }
             
-            $this->session = null;
-            $this->revokeSession();
+            self::$session = null;
+            self::revokeSession();
         }
     }
 
-    public function __destruct()
+    public static function init() : ?self
     {
-        unset($this->db);
+        if (DB::init() === null || Config::auth() === null) {
+
+            return null;
+        }
+
+        return self::$instance ?? self::$instance = new self;
     }
 
     /**
      * Gets the id of the Authenticated user account, or null if the user is 
      * Unauthenticated.
      */
-    public function getAccountId() : ?string
+    public static function getAccountId() : ?string
     {
-        return $this->session['accountId'] ?? null;
+        return self::$session['accountId'] ?? null;
     }
 
     /**
      * Gets the authentication session id of the Authenticated user account, or null if 
      * the user is Unauthenticated.
      */
-    public function getSessionId() : ?string
+    public static function getSessionId() : ?string
     {
-        return $this->session['sessionId'] ?? null;
+        return self::$session['sessionId'] ?? null;
     }
 
     /**
@@ -90,14 +92,14 @@ Class Auth
      * Authentication session is stateful as its data is stored in the database.
      * Returns true on success, false on error.
      */
-    public function initSession(string $accountId) : bool
+    public static function initSession(string $accountId) : bool
     {
         $device = Device::get();
-        $timeNow = Database::dateTime();
+        $timeNow = DB::dateTime();
         $IPAddress = $_SERVER['REMOTE_ADDR'];
 
         // Save the authentication session data to the database.
-        $this->db->prepare('INSERT INTO val_auth_sessions (AccountId, DeviceType, DevicePlatform, DeviceBrowser, 
+        DB::prepare('INSERT INTO val_auth_sessions (AccountId, DeviceType, DevicePlatform, DeviceBrowser, 
                             SignedInAt, LastSeenAt, SignedInIPAddress, LastSeenIPAddress) 
                             VALUES(:accountId, :deviceType, :devicePlatform, :deviceBrowser, :signedInAt, :lastSeenAt, 
                             INET6_ATON(:signedInIPAddress), INET6_ATON(:lastSeenIPAddress))')
@@ -112,7 +114,7 @@ Class Auth
                 ':lastSeenIPAddress' => $IPAddress
             ])->execute();
 
-        $sessionId = $this->db->lastInsertId();
+        $sessionId = DB::lastInsertId();
 
         if (!$sessionId) {
 
@@ -120,7 +122,7 @@ Class Auth
         }
 
         // Save the autnhentication session data to the authentication session cookie.
-        $this->session = [
+        self::$session = [
             'sessionId' =>  $sessionId,
             'accountId' =>  $accountId,
             'device' =>     $device,
@@ -130,14 +132,14 @@ Class Auth
             'lastSeenIPAddress' => $IPAddress
         ];
 
-        $sessionToken = Token::create($this->session);
+        $sessionToken = Token::create(self::$session);
 
         if (Cookie::setForDays(Config::account('auth_session_cookie_name'), $sessionToken, Config::account('auth_session_ttl_days'))) {
 
             return true;
         }
 
-        $this->session = null;
+        self::$session = null;
         return false;
     }
 
@@ -146,27 +148,27 @@ Class Auth
      * updates the values stored in the database. Returns true on success, false on 
      * error.
      */
-    public function updateSession() : bool
+    public static function updateSession() : bool
     {
-        $timeNow = Database::dateTime();
+        $timeNow = DB::dateTime();
         $IPAddress = $_SERVER['REMOTE_ADDR'];
 
         // Update the authentication session "last seen" data in the database.
-        $this->db->prepare('UPDATE val_auth_sessions SET LastSeenAt = :lastSeenAt, LastSeenIPAddress = INET6_ATON(:lastSeenIPAddress) 
+        DB::prepare('UPDATE val_auth_sessions SET LastSeenAt = :lastSeenAt, LastSeenIPAddress = INET6_ATON(:lastSeenIPAddress) 
                             WHERE Id = :sessionId')
             ->bind(':lastSeenAt', $timeNow)
             ->bind(':lastSeenIPAddress', $IPAddress)
-            ->bind(':sessionId', $this->getSessionId())
+            ->bind(':sessionId', self::getSessionId())
             ->execute();
 
-        if (!$this->db->rowCount()) {
+        if (!DB::rowCount()) {
 
             return false;
         }
 
         // Update the authentication session "last seen" data in the authentication session 
         // cookie.
-        $sessionUpdated = $this->session;
+        $sessionUpdated = self::$session;
         $sessionUpdated['lastSeenAt'] = $timeNow;
         $sessionUpdated['lastSeenIPAddress'] = $IPAddress;
 
@@ -174,7 +176,7 @@ Class Auth
 
         if (Cookie::setForDays(Config::account('auth_session_cookie_name'), $sessionToken, Config::account('auth_session_ttl_days'))) {
 
-            $this->session = $sessionUpdated;
+            self::$session = $sessionUpdated;
             return true;
         }
 
@@ -186,31 +188,31 @@ Class Auth
      * parameter given, Revokes the current authentication session. Returns true on 
      * success, false on error.
      */
-    public function revokeSession(?string $sessionId = null) : bool
+    public static function revokeSession(?string $sessionId = null) : bool
     {
         // Remove invalid authentication session cookie.
-        if (!$this->session) {
+        if (!self::$session) {
 
             return Cookie::unset(Config::account('auth_session_cookie_name'));
         }
 
         // Remove the authentication session from the database by given authentication 
         // session id or by the current authentication session id.
-        $this->db->prepare('DELETE FROM val_auth_sessions WHERE Id = :sessionId AND AccountId = :accountId')
-            ->bind(':sessionId', $sessionId ?? $this->session['sessionId'])
-            ->bind(':accountId', $this->session['accountId'])
+        DB::prepare('DELETE FROM val_auth_sessions WHERE Id = :sessionId AND AccountId = :accountId')
+            ->bind(':sessionId', $sessionId ?? self::$session['sessionId'])
+            ->bind(':accountId', self::$session['accountId'])
             ->execute();
 
-        if (!$this->db->rowCount()) {
+        if (!DB::rowCount()) {
             
             return false;
         }
 
         // Revoke the current authentication session and remove its authentication session 
         // cookie.
-        if (!$sessionId || $this->session['sessionId'] == $sessionId) {
+        if (!$sessionId || self::$session['sessionId'] == $sessionId) {
 
-            $this->session = null;
+            self::$session = null;
             Cookie::unset(Config::account('auth_session_cookie_name'));
 
         }
@@ -222,27 +224,27 @@ Class Auth
      * Revokes all the authentication sessions. Returns true on success, false on 
      * error. 
      */
-    public function revokeAllSessions() : bool
+    public static function revokeAllSessions() : bool
     {
         // Remove invalid authentication session cookie.
-        if (!$this->session) {
+        if (!self::$session) {
 
             return Cookie::unset(Config::account('auth_session_cookie_name'));
         }
 
         // Remove all the authentication sessions from the database.
-        $this->db->prepare('DELETE FROM val_auth_sessions WHERE AccountId = :accountId')
-            ->bind(':accountId', $this->session['accountId'])
+        DB::prepare('DELETE FROM val_auth_sessions WHERE AccountId = :accountId')
+            ->bind(':accountId', self::$session['accountId'])
             ->execute();
         
-        if (!$this->db->rowCount()) {
+        if (!DB::rowCount()) {
 
             return false;
         }
 
         // Revoke the current authentication session and remove its authentication session
         // cookie.
-        $this->session = null;
+        self::$session = null;
         Cookie::unset(Config::account('auth_session_cookie_name'));
 
         return true;
@@ -252,21 +254,21 @@ Class Auth
      * Revokes all the authentication sessions except the current one. Returns true on 
      * succes, false on error.
      */
-    public function revokeOtherSessions() : bool
+    public static function revokeOtherSessions() : bool
     {
         // Remove invalid authentication session cookie.
-        if (!$this->session) {
+        if (!self::$session) {
 
             return Cookie::unset(Config::account('auth_session_cookie_name'));
         }
 
         // Remove all the authentication sessions from the database, except the current one.
-        $this->db->prepare('DELETE FROM val_auth_sessions WHERE AccountId = :accountId AND Id <> :sessionId')
-            ->bind(':sessionId', $this->session['sessionId'])
-            ->bind(':accountId', $this->session['accountId'])
+        DB::prepare('DELETE FROM val_auth_sessions WHERE AccountId = :accountId AND Id <> :sessionId')
+            ->bind(':sessionId', self::$session['sessionId'])
+            ->bind(':accountId', self::$session['accountId'])
             ->execute();
 
-        return (bool) $this->db->rowCount();
+        return (bool) DB::rowCount();
     }
 
 }

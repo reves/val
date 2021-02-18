@@ -2,7 +2,7 @@
 
 namespace Val\App;
 
-Abstract Class Encryption
+Abstract Class Crypt
 {
     /**
      * Encrypts plaintext $data in a Secret-key Authenticated Encryption way. Returns a 

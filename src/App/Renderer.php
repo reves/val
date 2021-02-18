@@ -2,27 +2,38 @@
 
 namespace Val\App;
 
-Class Renderer
+use Val\App;
+
+Final Class Renderer
 {
+    protected static ?self $instance = null;
+
     // View's content
-    protected string $content;
+    protected static string $content = '';
 
     // Registered bindings and their values
-    protected array $bindings;
+    protected static array $bindings = [];
 
     // Registerd blocks
-    protected array $blocks;
+    protected static array $blocks = [];
 
     // Minify loaded templates
-    protected bool $minify = true;
+    protected static bool $minify = true;
+
+    protected function __construct() {}
+
+    public static function init() : self
+    {
+        return self::$instance ?? self::$instance = new self;
+    }
 
     /**
      * Registers the $binding's $value.
      */
-    public function bind(string $binding, string $value = '') : self
+    public static function bind(string $binding, string $value = '') : self
     {
-        $this->bindings[$binding] = $value;
-        return $this;
+        self::$bindings[$binding] = $value;
+        return self::$instance;
     }
 
     /**
@@ -30,162 +41,162 @@ Class Renderer
      * $relations should represent an array of $binding => $value relations. Read 
      * self::bind method documentation for details.
      */
-    public function bindMultiple(array $relations) : self
+    public static function bindMultiple(array $relations) : self
     {
         foreach ($relations as $binding => $value)
-            $this->bind($binding, $value);
+            self::bind($binding, $value);
 
-        return $this;
+        return self::$instance;
     }
 
     /**
      * Registers the block so makes it visible.
      */
-    public function reveal($block) : self
+    public static function reveal($block) : self
     {
-        $this->blocks[] = $block;
-        return $this;
+        self::$blocks[] = $block;
+        return self::$instance;
     }
 
     /**
      * Registers multiple $blocks using sef::reveal method for each of them so makes 
      * them visible. Read self::reveal method documentation for details.
      */
-    public function revealMultiple(array $blocks) : self
+    public static function revealMultiple(array $blocks) : self
     {
         foreach ($blocks as $block)
-            $this->reveal($block);
+            self::reveal($block);
 
-        return $this;
+        return self::$instance;
     }
 
     /**
      * Sends the content as response.
      */
-    public function show() : void
+    public static function show() : void
     {
-        echo $this->compile()->content;
+        echo self::compile()::$content;
     }
 
     /**
      * Returns the content at its current state.
      */
-    public function getContent() : string
+    public static function getContent() : string
     {
-        return $this->compile()->content;
+        return self::compile()::$content;
     }
 
     /**
      * Loads a template and compiles it.
      */
-    public function load(string $name, bool $minify = true) : self
+    public static function load(string $name, bool $minify = true) : self
     {
-        $this->minify = $minify;
-        return $this->reset()->getTemplate($name);
+        self::$minify = $minify;
+        return self::reset()->getTemplate($name);
     }
 
     /**
      * Gets the template file contents.
      */
-    protected function getTemplate(string $name, bool $minify = true) : self
+    protected static function getTemplate(string $name, bool $minify = true) : self
     {
-        $path = DIR_TEMPLATES . "/{$name}.tpl";
+        $path = App::$DIR_TEMPLATES . "/{$name}.tpl";
 
-        $this->content = '';
+        self::$content = '';
 
         if (is_file($path)) {
 
-            $this->content = ($minify) ? $this->minify(file_get_contents($path)) : file_get_contents($path);
+            self::$content = ($minify) ? self::minify(file_get_contents($path)) : file_get_contents($path);
 
         }
 
-        return $this;
+        return self::$instance;
     }
 
     /**
      * Minifies the template content.
      */
-    protected function minify(string $template) : string
+    protected static function minify(string $template) : string
     {   
         // Remove: "\r\n\t" 1+  |   "space" 2+  |   HTML comments
-        return ($this->minify) ? preg_replace('/([\r\n\t]+)|([ ]{2,})|(<!--.*?-->)/', '', $template) : $template;
+        return (self::$minify) ? preg_replace('/([\r\n\t]+)|([ ]{2,})|(<!--.*?-->)/', '', $template) : $template;
     }
 
     /**
      * Compiles a raw template.
      */
-    protected function compile() : self
+    protected static function compile() : self
     {
-        return $this->includeTemplates()->compileBlocks()->compileBindings();
+        return self::includeTemplates()->compileBlocks()->compileBindings();
     }
 
     /**
      * Includes the templates specified in base template.
      */
-    protected function includeTemplates() : self
+    protected static function includeTemplates() : self
     {
         $matches = [];
 
-        preg_match_all('/\{\@(.*?)\}/', $this->content, $matches, PREG_SET_ORDER);
+        preg_match_all('/\{\@(.*?)\}/', self::$content, $matches, PREG_SET_ORDER);
 
         foreach ($matches as $match) {
 
-            $path = DIR_TEMPLATES . "/{$match[1]}.tpl";
+            $path = App::$DIR_TEMPLATES . "/{$match[1]}.tpl";
 
             if (is_file($path)) {
 
-                $template = $this->minify(file_get_contents($path));
-                $this->content = preg_replace('/' . preg_quote($match[0], '/') . '/', $template, $this->content);
+                $template = self::minify(file_get_contents($path));
+                self::$content = preg_replace('/' . preg_quote($match[0], '/') . '/', $template, self::$content);
             
             }
         }
 
-        return $this;
+        return self::$instance;
     }
 
     /**
      * Leaves only registered blocks and remove others.
      */
-    protected function compileBlocks() : self
+    protected static function compileBlocks() : self
     {
         // Leave Active Blocks
-        foreach ($this->blocks as $block ) {
+        foreach (self::$blocks as $block ) {
 
-            $this->content = preg_replace("/(\[{$block}\])|(\[\/{$block}\])/i", '', $this->content);
+            self::$content = preg_replace("/(\[{$block}\])|(\[\/{$block}\])/i", '', self::$content);
 
         }
 
         // Remove Inactive Blocks
-        $this->content = preg_replace('/\[(.*?)\].*?\[\/(\1)\]/is', '', $this->content);
+        self::$content = preg_replace('/\[(.*?)\].*?\[\/(\1)\]/is', '', self::$content);
 
-        return $this;
+        return self::$instance;
     }
 
     /**
      * Replaces the registered bindings with their values.
      */
-    protected function compileBindings() : self
+    protected static function compileBindings() : self
     {
         // Replace Bindings
-        foreach ($this->bindings as $binding => $value) {
+        foreach (self::$bindings as $binding => $value) {
 
-            $this->content = preg_replace("/\{{$binding}\}/i", $value, $this->content);
+            self::$content = preg_replace("/\{{$binding}\}/i", $value, self::$content);
 
         }
 
-        return $this;
+        return self::$instance;
     }
     
     /**
      * Resets the renderer.
      */
-    public function reset() : self
+    public static function reset() : self
     {
-        $this->content = '';
-        $this->bindings = [];
-        $this->blocks = [];
+        self::$content = '';
+        self::$bindings = [];
+        self::$blocks = [];
 
-        return $this;
+        return self::$instance;
     }
 
 }

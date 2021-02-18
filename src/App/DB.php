@@ -5,34 +5,57 @@ namespace Val\App;
 use Val\App;
 use PDO;
 
-Class Database
+Final Class DB
 {
+    protected static ?self $instance = null;
+
     // Data Source Name
-    protected string $DSN;
+    protected static string $dsn = '';
 
     // Database handler.
-    protected PDO $handler;
+    protected static ?PDO $handler = null;
 
     // Prepared statement
-    protected \PDOStatement $statement;
+    protected static ?\PDOStatement $statement = null;
 
     // Transaction status
-    protected bool $transactionActive = false;
+    protected static bool $transactionActive = false;
 
     // Counter for the question mark placeholders
-    protected int $questionMarkPlaceholderIndex = 0;
+    protected static int $questionMarkPlaceholderIndex = 0;
 
     /**
      * Initializes connection parameters.
      */
-    public function __construct()
+    protected function __construct()
     {
-        $host = Config::db('host');
-        $port = Config::db('port');
-        $charset = Config::db('charset');
-        $dbname = Config::db('dbname');
+        $driver = Config::db('driver') ?? 'mysql';
+        self::$dsn = "{$driver}:";
 
-        $this->DSN = "mysql:host={$host};port={$port};charset={$charset};dbname={$dbname}";
+        if ($driver === 'sqlite') {
+            $path = Config::db('path');
+            $memory = Config::db('memory');
+            self::$dsn .= $path ?? ($memory ? ':memory:' : '' );
+
+            return;
+        }
+
+        if ($host = Config::db('host')) self::$dsn .= "host={$host};";
+        if ($port = Config::db('port')) self::$dsn .= "port={$port};";
+        if ($dbname = Config::db('dbname')) self::$dsn .= "dbname={$dbname};";
+        if ($user = Config::db('user')) self::$dsn .= "user={$user};";
+        if ($pass = Config::db('pass')) self::$dsn .= "password={$pass};";
+        self::$dsn .= ($driver === 'pgsql') ? 'options=\'--client_encoding=UTF8\'' : 'charset=utf8mb4';
+    }
+
+    public static function init() : ?self
+    {
+        if (Config::db() === null) {
+            
+            return null;
+        }
+
+        return self::$instance ?? self::$instance = new self;
     }
 
     /**
@@ -40,29 +63,28 @@ Class Database
      */
     public function __destruct()
     {
-        $this->close();
+        self::close();
     }
 
     /** 
      * Connects to the database.
      */
-    protected function connect() : self
+    protected static function connect() : self
     {
-        if ($this->handler) return $this;
+        if (self::$handler) return self::$instance;
 
         $options = [
             PDO::ATTR_CASE => PDO::CASE_NATURAL,
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_ORACLE_NULLS => PDO::NULL_TO_STRING,
-            PDO::ATTR_STRINGIFY_FETCHES => true,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_ORACLE_NULLS => PDO::NULL_NATURAL,
+            PDO::ATTR_STRINGIFY_FETCHES => false,
             PDO::ATTR_EMULATE_PREPARES => false,
-            PDO::MYSQL_ATTR_FOUND_ROWS => true,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
         ];
 
         try {
 
-            $this->handler = new PDO($this->DSN, Config::db('user'), Config::db('pass'), $options);
+            self::$handler = new PDO(self::$dsn, options: $options);
 
         } catch (\PDOException $e) {
 
@@ -70,91 +92,91 @@ Class Database
             App::exit();
         }
 
-        return $this;
+        return self::$instance;
     }
 
     /**
      * Initiates a new transaction.
      */
-    public function beginTransaction() : self
+    public static function beginTransaction() : self
     {
-        if (!$this->transactionActive)
-            $this->transactionActive = $this->connect()->handler->beginTransaction();
+        if (!self::$transactionActive)
+            self::$transactionActive = self::connect()::$handler->beginTransaction();
 
-        return $this;
+        return self::$instance;
     }
 
     /**
      * Commits the current transaction.
      */
-    public function endTransaction() : self
+    public static function endTransaction() : self
     {
-        if ($this->transactionActive)
-            $this->transactionActive = !$this->handler->commit();
+        if (self::$transactionActive)
+            self::$transactionActive = !self::$handler->commit();
 
-        return $this;
+        return self::$instance;
     }
 
     /**
      * Cancels the current transaction.
      */
-    public function cancelTransaction() : self
+    public static function cancelTransaction() : self
     {
-        if ($this->transactionActive)
-            $this->transactionActive = !$this->handler->rollBack();
+        if (self::$transactionActive)
+            self::$transactionActive = !self::$handler->rollBack();
 
-        return $this;
+        return self::$instance;
     }
 
     /**
      * Verifies that the current transaction is active.
      */
-    public function transactionIsActive() : bool
+    public static function transactionIsActive() : bool
     {
-        return $this->transactionActive;
+        return self::$transactionActive;
     }
 
     /**
      * Executes an SQL statement with a custom query. Data inside the query should be 
      * properly escaped.
      */
-    public function executeCustom(string $query) : self
+    public static function executeCustom(string $query) : self
     {
-        $this->handler->exec($query);
+        self::$handler->exec($query);
 
-        return $this;
+        return self::$instance;
     }
 
     /**
      * The id of the last inserted row. Warning(!) In case of a transaction, should be 
      * used before commit.
      */
-    public function lastInsertId() : string
+    public static function lastInsertId() : string
     {
-        return $this->handler->lastInsertId();
+        return self::$handler->lastInsertId();
     }
     
     /**
      * Prepares the statement for execution.
      */
-    public function prepare(string $query) : self
+    public static function prepare(string $query) : self
     {
-        $this->connect()->statement = $this->handler->prepare($query);
+        self::connect()::$statement = self::$handler->prepare($query);
 
-        $this->questionMarkPlaceholderIndex = 0;
+        self::$questionMarkPlaceholderIndex = 0;
 
-        return $this;
+        return self::$instance;
     }
 
     /**
      * Executes the prepared statement. All the $parameters values are treated as 
      * PDO::PARAM_STR.
      */
-    public function execute(?array $parameters = null) : self
+    public static function execute(?array $parameters = null) : self
     {
-        $this->statement->execute($parameters);
+        self::$statement->execute($parameters);
 
-        return $this;
+        return self::$instance;
     }
 
     /**
@@ -162,10 +184,10 @@ Class Database
      * denoting a named placehold or an int denoting a question mark placeholder index 
      * in the query.
      */
-    public function bind($placeholder, $value) : self
+    public static function bind($placeholder, $value) : self
     {
         if (is_int($placeholder))
-            $this->questionMarkPlaceholderIndex = $placeholder;
+            self::$questionMarkPlaceholderIndex = $placeholder;
 
         switch (true) {
 
@@ -186,9 +208,9 @@ Class Database
 
         }
 
-        $this->statement->bindValue($placeholder, $value, $type);
+        self::$statement->bindValue($placeholder, $value, $type);
 
-        return $this;
+        return self::$instance;
     }
 
     /**
@@ -196,21 +218,21 @@ Class Database
      * $relations should represent an array of $placeholder => $value relations. 
      * Read self::bind method documentation for details.
      */
-    public function bindMultiple(array $relations) : self
+    public static function bindMultiple(array $relations) : self
     {
         foreach ($relations as $placeholder => $value)
-            $this->bind($placeholder, $value);
+            self::bind($placeholder, $value);
 
-        return $this;
+        return self::$instance;
     }
 
     /**
      * Binds the $value to a question mark placeholder whose index automatically 
      * increments.
      */
-    public function bindPlaceholder($value) : self
+    public static function bindPlaceholder($value) : self
     {
-        return $this->bind(++$this->placeholderIndex, $value);
+        return self::bind(++self::$questionMarkPlaceholderIndex, $value);
     }
 
     /**
@@ -218,12 +240,12 @@ Class Database
      * automatically increments using sef::bindPlaceholder method for each of them. 
      * Read self::bindPlaceholder method documentation for details.
      */
-    public function bindMultiplePlaceholders(array $values) : self
+    public static function bindMultiplePlaceholders(array $values) : self
     {
         foreach ($values as $value)
-            $this->bindPlaceholder($value);
+            self::bindPlaceholder($value);
 
-        return $this;
+        return self::$instance;
     }
 
     /**
@@ -237,10 +259,10 @@ Class Database
      *  ]
      * 
      */
-    public function resultset(?array $parameters = null) : array
+    public static function resultset(?array $parameters = null) : array
     {
-        $this->execute($parameters);
-        return $this->statement->fetchAll();
+        self::execute($parameters);
+        return self::$statement->fetchAll();
     }
 
     /**
@@ -251,11 +273,11 @@ Class Database
      *  ["id" => 1, "name" => "banana"]
      * 
      */
-    public function single(?array $parameters = null) : array
+    public static function single(?array $parameters = null) : array
     {
-        $this->execute($parameters);
-        $row = (array)$this->statement->fetch();
-        $this->statement->closeCursor();
+        self::execute($parameters);
+        $row = (array)self::$statement->fetch();
+        self::$statement->closeCursor();
 
         return $row;
     }
@@ -265,9 +287,9 @@ Class Database
      * PDO::MYSQL_ATTR_FOUND_ROWS is set to true, it gets the number of found (matched) 
      * rows, not the number of changed rows.
      */
-    public function rowCount() : int
+    public static function rowCount() : int
     {
-        return $this->statement->rowCount();
+        return self::$statement->rowCount();
     }
 
     /**
@@ -289,9 +311,10 @@ Class Database
     /**
      * Closes the connection.
      */
-    public function close() : void
+    public static function close() : void
     {
-        unset($this->statement, $this->handler);
+        self::$statement = null;
+        self::$handler = null;
     }
     
 }

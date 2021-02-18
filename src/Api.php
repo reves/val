@@ -2,9 +2,9 @@
 
 namespace Val;
 
-use Val\App\{JSON, CSRF};
+use Val\App\{JSON, CSRF, Auth};
 
-Class Api Extends App
+Class Api
 {
     // The only method allowed for the requested API action method is GET.
     private bool $flagOnlyGET = false;
@@ -30,7 +30,7 @@ Class Api Extends App
 
     // Request data fields and their values.
     private array $fields;
-  
+
     /**
      * Calls the requested API action method. Responds with an HTTP status code of 
      * "404 Not Found" if the action method is private or does not exists. Sends the 
@@ -38,9 +38,7 @@ Class Api Extends App
      */
     final public function __construct(?string $action = null)
     {
-        parent::__construct();
-
-        if (!$action || !Loader::isCallable([$this, $action])) {
+        if (!$action || !App::_isCallable([$this, $action])) {
 
             $this->respondError(404);
         }
@@ -226,7 +224,7 @@ Class Api Extends App
         if ($this->flagOnlyUnauthenticated)
             throw new \LogicException('It is not possible to allow only Authenticated user, only Unauthenticated user is already allowed.');
 
-        if ($this->auth->getAccountId()) {
+        if (Auth::getAccountId()) {
 
             $this->flagOnlyAuthenticated = true;
             return $this;
@@ -246,7 +244,7 @@ Class Api Extends App
         if ($this->flagOnlyAuthenticated)
             throw new \LogicException('It is not possible to allow only Unauthenticated user, only Authenticated user is already allowed.');
 
-        if (!$this->auth->getAccountId()) {
+        if (!Auth::getAccountId()) {
 
             $this->flagOnlyUnauthenticated = true;
             return $this;
