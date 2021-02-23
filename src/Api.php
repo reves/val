@@ -38,12 +38,19 @@ Class Api
      */
     final public function __construct(?string $action = null)
     {
-        if (!$action || !App::_isCallable([$this, $action])) {
+        if ($action) {
 
-            $this->respondError(404);
+            if (App::_isCallable([$this, $action])) {
+
+                $this->$action()->respondOnFail();
+            }
+
+        } else if (App::_isCallable($this)) {
+
+            $this()->respondOnFail();
         }
 
-        $this->$action()->respondOnFail();
+        $this->respondError(404);
     }
 
     /**

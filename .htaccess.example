@@ -1,0 +1,25 @@
+<IfModule mod_rewrite.c>
+    <IfModule mod_negotiation.c>
+        Options -MultiViews -Indexes
+    </IfModule>
+
+    DirectorySlash Off
+
+    RewriteEngine On
+
+    # Replace all the 2+ slashes with a slash in the request
+    RewriteCond %{THE_REQUEST} \s[^?]*//
+    RewriteRule ^.*$ /$0 [L,NE,R=301]
+
+    # Remove the trailing slash
+    RewriteCond %{REQUEST_URI} (.+)/$
+    RewriteRule ^ %1 [L,R=301]
+
+    # Api
+    RewriteRule ^api/([a-zA-Z]{1,50})/([a-zA-Z]{1,50})$ index.php?_api=$1&_action=$2 [NC,QSA,L]
+    RewriteRule ^api/([a-zA-Z]{1,50})$ index.php?_api=$1 [NC,QSA,L]
+
+    # View
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^ index.php [L]
+</IfModule>

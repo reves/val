@@ -22,7 +22,8 @@ Abstract Class App
     // Directory path constants
     public static string $DIR_ROOT;
     public static string $DIR_API;
-    public static string $DIR_CONFIG; 
+    public static string $DIR_CONFIG;
+    public static string $DIR_MIGRATIONS;
     public static string $DIR_RESOURCES;
     public static string $DIR_TEMPLATES;
 
@@ -32,43 +33,44 @@ Abstract Class App
     public static function run(?\Closure $view = null, ?string $rootPath = null) : void
     {
         if (self::$running) {
-            
+
             return;
         }
 
-        self::$running = true;
+        require __DIR__.'/../vendor/autoload.php';
 
-        self::$DIR_ROOT         = $rootPath ?? $_SERVER['DOCUMENT_ROOT'] . '/..';
+        self::$running = true;
+        self::$DIR_ROOT         = $rootPath ?? ($_SERVER['DOCUMENT_ROOT'] ? $_SERVER['DOCUMENT_ROOT'] : getcwd()) . '/..';
         self::$DIR_API          = self::$DIR_ROOT . '/api';
         self::$DIR_CONFIG       = self::$DIR_ROOT . '/config';
+        self::$DIR_MIGRATIONS   = self::$DIR_ROOT . '/migrations';
         self::$DIR_RESOURCES    = self::$DIR_ROOT . '/resources';
         self::$DIR_TEMPLATES    = self::$DIR_ROOT . '/templates';
 
-        require __DIR__.'/../vendor/autoload.php';
-
         date_default_timezone_set('UTC');
- 
-        CSRF::init();
-        DB::init();
-        Auth::init();
-        Renderer::init();
-
         header('Cache-Control: no-store, must-revalidate');
         header('Strict-Transport-Security: max-age=300'); // Details: https://hstspreload.org/
         header('X-Content-Type-Options: nosniff');
         header('X-Frame-Options: DENY');
 
-        if (isset($_GET['api'])) {
+        CSRF::init();
+        DB::init();
+        Auth::init();
+        Renderer::init();
+
+        if (isset($_GET['_api'])) {
 
             header('Content-type: application/json; charset=utf-8');
-
             self::loadApi();
 
-        } else {
+            return;
+        }
 
-            header('Content-Type: text/html; charset=utf-8');
-            header('Referrer-Policy: origin, strict-origin');
-            header('X-XSS-Protection: 1; mode=block');
+        header('Content-Type: text/html; charset=utf-8');
+        header('Referrer-Policy: origin, strict-origin');
+        header('X-XSS-Protection: 1; mode=block');
+
+        if ($view) {
 
             $view(); // It is recommended to use 'Content-Security-Policy'
 
@@ -80,16 +82,16 @@ Abstract Class App
      */
     protected static function loadApi() : Api
     {
-        $apiClassName = ucfirst($_GET['api']) . 'Api';
+        $apiClassName = ucfirst($_GET['_api']) . 'Api';
         $path = self::$DIR_API . "/{$apiClassName}.php";
 
         if (is_file($path)) {
 
             require $path;
 
-            if (isset($_GET['action'])) {
-                
-                return new $apiClassName($_GET['action']);
+            if (isset($_GET['_action'])) {
+
+                return new $apiClassName($_GET['_action']);
             }
 
             return new $apiClassName;

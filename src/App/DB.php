@@ -40,22 +40,18 @@ Final Class DB
             return;
         }
 
-        if ($host = Config::db('host')) self::$dsn .= "host={$host};";
-        if ($port = Config::db('port')) self::$dsn .= "port={$port};";
-        if ($dbname = Config::db('dbname')) self::$dsn .= "dbname={$dbname};";
-        if ($user = Config::db('user')) self::$dsn .= "user={$user};";
-        if ($pass = Config::db('pass')) self::$dsn .= "password={$pass};";
+        ($host = Config::db('host')) && self::$dsn .= "host={$host};";
+        ($port = Config::db('port')) && self::$dsn .= "port={$port};";
+        ($db = Config::db('db')) && self::$dsn .= "dbname={$db};";
+        ($user = Config::db('user')) && self::$dsn .= "user={$user};";
+        ($pass = Config::db('pass')) && self::$dsn .= "password={$pass};";
+
         self::$dsn .= ($driver === 'pgsql') ? 'options=\'--client_encoding=UTF8\'' : 'charset=utf8mb4';
     }
 
     public static function init() : ?self
     {
-        if (Config::db() === null) {
-            
-            return null;
-        }
-
-        return self::$instance ?? self::$instance = new self;
+        return (Config::db() === null) ? null : self::$instance ?? self::$instance = new self;
     }
 
     /**
@@ -98,34 +94,25 @@ Final Class DB
     /**
      * Initiates a new transaction.
      */
-    public static function beginTransaction() : self
+    public static function beginTransaction() : bool
     {
-        if (!self::$transactionActive)
-            self::$transactionActive = self::connect()::$handler->beginTransaction();
-
-        return self::$instance;
+        return (self::$transactionActive) ? true : self::$transactionActive = self::connect()::$handler->beginTransaction();
     }
 
     /**
      * Commits the current transaction.
      */
-    public static function endTransaction() : self
+    public static function commit() : bool
     {
-        if (self::$transactionActive)
-            self::$transactionActive = !self::$handler->commit();
-
-        return self::$instance;
+        return (!self::$transactionActive) ? true : self::$transactionActive = !self::$handler->commit();
     }
 
     /**
      * Cancels the current transaction.
      */
-    public static function cancelTransaction() : self
+    public static function rollback() : bool
     {
-        if (self::$transactionActive)
-            self::$transactionActive = !self::$handler->rollBack();
-
-        return self::$instance;
+        return (!self::$transactionActive) ? true : self::$transactionActive = !self::$handler->rollBack();
     }
 
     /**
@@ -138,11 +125,11 @@ Final Class DB
 
     /**
      * Executes an SQL statement with a custom query. Data inside the query should be 
-     * properly escaped.
+     * properly escaped. This method cannot be used with any queries that return results.
      */
-    public static function executeCustom(string $query) : self
+    public static function raw(string $query) : self
     {
-        self::$handler->exec($query);
+        self::connect()::$handler->exec($query);
 
         return self::$instance;
     }
@@ -161,8 +148,7 @@ Final Class DB
      */
     public static function prepare(string $query) : self
     {
-        self::connect()::$statement = self::$handler->prepare($query);
-
+        self::$statement = self::connect()::$handler->prepare($query);
         self::$questionMarkPlaceholderIndex = 0;
 
         return self::$instance;
@@ -170,13 +156,11 @@ Final Class DB
 
     /**
      * Executes the prepared statement. All the $parameters values are treated as 
-     * PDO::PARAM_STR.
+     * PDO::PARAM_STR. Returns true on success.
      */
-    public static function execute(?array $parameters = null) : self
+    public static function execute(?array $parameters = null) : bool
     {
-        self::$statement->execute($parameters);
-
-        return self::$instance;
+        return self::$statement->execute($parameters);
     }
 
     /**
@@ -184,7 +168,7 @@ Final Class DB
      * denoting a named placehold or an int denoting a question mark placeholder index 
      * in the query.
      */
-    public static function bind($placeholder, $value) : self
+    public static function bind(string|int $placeholder, bool|float|int|string|null $value) : self
     {
         if (is_int($placeholder))
             self::$questionMarkPlaceholderIndex = $placeholder;
@@ -214,7 +198,7 @@ Final Class DB
     }
 
     /**
-     * Binds multiple placeholders using sef::bind method for each of them. The 
+     * Binds multiple placeholders using sef::bind method for each placeholder. The 
      * $relations should represent an array of $placeholder => $value relations. 
      * Read self::bind method documentation for details.
      */
@@ -230,7 +214,7 @@ Final Class DB
      * Binds the $value to a question mark placeholder whose index automatically 
      * increments.
      */
-    public static function bindPlaceholder($value) : self
+    public static function bindPlaceholder(bool|float|int|string|null $value) : self
     {
         return self::bind(++self::$questionMarkPlaceholderIndex, $value);
     }
@@ -262,24 +246,26 @@ Final Class DB
     public static function resultset(?array $parameters = null) : array
     {
         self::execute($parameters);
+
         return self::$statement->fetchAll();
     }
 
     /**
-     * Gets the array containing first row of the result set rows.
+     * Gets the array containing first row of the result set rows. Returns null in case of 
+     * an empty result or an error.
      * 
      * Result example: (using PDO::FETCH_ASSOC)
      * 
      *  ["id" => 1, "name" => "banana"]
      * 
      */
-    public static function single(?array $parameters = null) : array
+    public static function single(?array $parameters = null) : ?array
     {
         self::execute($parameters);
-        $row = (array)self::$statement->fetch();
+        $row = self::$statement->fetch();
         self::$statement->closeCursor();
 
-        return $row;
+        return $row ? $row : null;
     }
 
     /**
@@ -303,7 +289,7 @@ Final Class DB
     /**
      * Generates a string with $count question mark placeholders in total.
      */
-    public static function generatePlaceholders($count) : string
+    public static function generatePlaceholders(int $count) : string
     {
         return rtrim(str_repeat('?,', $count), ',');
     }
