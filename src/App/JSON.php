@@ -15,12 +15,12 @@ Abstract Class JSON
         try {
 
             $json = json_encode($data, 
-                JSON_THROW_ON_ERROR |
-                JSON_INVALID_UTF8_IGNORE | 
-                JSON_UNESCAPED_UNICODE | 
-                JSON_UNESCAPED_LINE_TERMINATORS | 
-                JSON_UNESCAPED_SLASHES | 
-                JSON_PRESERVE_ZERO_FRACTION
+                \JSON_THROW_ON_ERROR |
+                \JSON_INVALID_UTF8_IGNORE | 
+                \JSON_UNESCAPED_UNICODE | 
+                \JSON_UNESCAPED_LINE_TERMINATORS | 
+                \JSON_UNESCAPED_SLASHES | 
+                \JSON_PRESERVE_ZERO_FRACTION
             );
 
         } catch(\JsonException $e) {
@@ -46,11 +46,11 @@ Abstract Class JSON
         try {
 
             $data = json_decode($json, true, 512, 
-                JSON_THROW_ON_ERROR |
-                JSON_INVALID_UTF8_IGNORE | 
-                JSON_BIGINT_AS_STRING
+                \JSON_THROW_ON_ERROR |
+                \JSON_INVALID_UTF8_IGNORE | 
+                \JSON_BIGINT_AS_STRING
             );
-        
+
         } catch(\JsonException $e) {
 
             error_log($e->getMessage());

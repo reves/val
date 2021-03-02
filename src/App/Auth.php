@@ -59,6 +59,10 @@ Final Class Auth
         }
     }
 
+    /**
+     * Initializes the user authentication module. Returns null if the configuration file
+     * is missing or the database module cannot be initialized.
+     */
     public static function init() : ?self
     {
         if (DB::init() === null || Config::auth() === null) {

@@ -10,12 +10,12 @@ Abstract Class Crypt
      */
     public static function encrypt(string $data) : string
     {
-        $nonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+        $nonce = random_bytes(\SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
         $ciphertext = sodium_crypto_secretbox($data, $nonce, Config::app('key'));
         
         sodium_memzero($data);
 
-        return sodium_bin2base64($nonce . $ciphertext, SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
+        return sodium_bin2base64($nonce . $ciphertext, \SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
     }
 
     /**
@@ -26,9 +26,9 @@ Abstract Class Crypt
     {
         try {
 
-            $decoded = sodium_base642bin($data, SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
-            $nonce = mb_substr($decoded, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES, '8bit');
-            $ciphertext = mb_substr($decoded, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES, null, '8bit');
+            $decoded = sodium_base642bin($data, \SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
+            $nonce = mb_substr($decoded, 0, \SODIUM_CRYPTO_SECRETBOX_NONCEBYTES, '8bit');
+            $ciphertext = mb_substr($decoded, \SODIUM_CRYPTO_SECRETBOX_NONCEBYTES, null, '8bit');
             $plaintext = sodium_crypto_secretbox_open($ciphertext, $nonce, Config::app('key'));
             
         } catch (\SodiumException $e) {

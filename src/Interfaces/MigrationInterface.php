@@ -1,6 +1,6 @@
 <?php
 
-namespace Val;
+namespace Val\Interfaces;
 
 Interface MigrationInterface
 {

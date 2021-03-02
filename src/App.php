@@ -40,7 +40,7 @@ Abstract Class App
         require __DIR__.'/../vendor/autoload.php';
 
         self::$running = true;
-        self::$DIR_ROOT         = $rootPath ?? ($_SERVER['DOCUMENT_ROOT'] ? $_SERVER['DOCUMENT_ROOT'] : getcwd()) . '/..';
+        self::$DIR_ROOT         = $rootPath ?? ($_SERVER['DOCUMENT_ROOT'] ? $_SERVER['DOCUMENT_ROOT'].'/..' : getcwd());
         self::$DIR_API          = self::$DIR_ROOT . '/api';
         self::$DIR_CONFIG       = self::$DIR_ROOT . '/config';
         self::$DIR_MIGRATIONS   = self::$DIR_ROOT . '/migrations';

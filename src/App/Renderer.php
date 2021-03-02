@@ -22,6 +22,9 @@ Final Class Renderer
 
     protected function __construct() {}
 
+    /**
+     * Initializes the Renderer module.
+     */
     public static function init() : self
     {
         return self::$instance ?? self::$instance = new self;

@@ -49,25 +49,25 @@ Final Class DB
         self::$dsn .= ($driver === 'pgsql') ? 'options=\'--client_encoding=UTF8\'' : 'charset=utf8mb4';
     }
 
+    /**
+     * Initializes the database module. Returns null if the configuration file is missing.
+     */
     public static function init() : ?self
     {
         return (Config::db() === null) ? null : self::$instance ?? self::$instance = new self;
     }
 
-    /**
-     * Closes connection on destruct.
-     */
-    public function __destruct()
-    {
-        self::close();
-    }
-
     /** 
      * Connects to the database.
+     * 
+     * @throws \RuntimeException
      */
     protected static function connect() : self
     {
         if (self::$handler) return self::$instance;
+
+        if (Config::db() === null)
+            throw new \RuntimeException('Database configuration file is missing.');
 
         $options = [
             PDO::ATTR_CASE => PDO::CASE_NATURAL,
@@ -265,7 +265,7 @@ Final Class DB
         $row = self::$statement->fetch();
         self::$statement->closeCursor();
 
-        return $row ? $row : null;
+        return $row ?: null;
     }
 
     /**
@@ -301,6 +301,14 @@ Final Class DB
     {
         self::$statement = null;
         self::$handler = null;
+    }
+
+    /**
+     * Closes connection on destruct.
+     */
+    public function __destruct()
+    {
+        self::close();
     }
     
 }

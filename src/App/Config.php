@@ -25,8 +25,6 @@ Abstract Class Config
         if ($argumentsCount > 1)
             throw new \LogicException('Only one config field can be specified.');
 
-        $name = strtolower($name);
-
         if (!array_key_exists($name, self::$configs)) {
 
             $path = App::$DIR_CONFIG . "/{$name}.php";
