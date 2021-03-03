@@ -25,7 +25,7 @@ Abstract Class Lang
             return self::$code = $code;
         }
 
-        return self::$code = Config::app('lang_default');
+        return self::$code = 'en';
     }
 
     /**

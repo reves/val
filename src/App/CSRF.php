@@ -9,8 +9,11 @@ Abstract Class CSRF
     /**
      * Sets the CSRF token cookie if not set.
      */
-    public static function init()
+    public static function init() : void
     {
+        if (Config::app() === null)
+            return;
+
         if (!Cookie::isSet(self::COOKIE_NAME))
             Cookie::set(self::COOKIE_NAME, Crypt::encrypt(random_bytes(32)), ['httponly' => false, 'samesite' => 'Strict']);  
     }

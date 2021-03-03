@@ -30,7 +30,7 @@ Abstract Class Config
             $path = App::$DIR_CONFIG . "/{$name}.php";
 
             if (!is_file($path)) {
-                
+
                 return null;
             }
 

@@ -17,8 +17,8 @@ Final Class Renderer
     // Registerd blocks
     protected static array $blocks = [];
 
-    // Minify loaded templates
-    protected static bool $minify = true;
+    // Whether to minify loaded templates
+    protected static bool $minify;
 
     protected function __construct() {}
 
@@ -28,6 +28,25 @@ Final Class Renderer
     public static function init() : self
     {
         return self::$instance ?? self::$instance = new self;
+    }
+
+    /**
+     * Loads a template. Throws an Exception if the specified template file is missing.
+     * 
+     * @throws \RuntimeException
+     */
+    public static function load(string $file, bool $minify = true, ?string $directoryPath = null) : self
+    {
+        self::reset();
+        self::$minify = $minify;
+        $path = ($directoryPath ?? App::$DIR_TEMPLATES) . "/{$file}";
+
+        if (!is_file($path))
+            throw new \RuntimeException("Template file \"{$file}\" is missing.");
+
+        self::$content = self::minify(file_get_contents($path)); // TODO: check file_get_contents for false value
+
+        return self::$instance;
     }
 
     /**
@@ -74,7 +93,7 @@ Final Class Renderer
     }
 
     /**
-     * Sends the content as response.
+     * Compiles and outputs the content.
      */
     public static function show() : void
     {
@@ -82,38 +101,11 @@ Final Class Renderer
     }
 
     /**
-     * Returns the content at its current state.
+     * Compiles and returns the content.
      */
     public static function getContent() : string
     {
         return self::compile()::$content;
-    }
-
-    /**
-     * Loads a template and compiles it.
-     */
-    public static function load(string $name, bool $minify = true) : self
-    {
-        self::$minify = $minify;
-        return self::reset()->getTemplate($name);
-    }
-
-    /**
-     * Gets the template file contents.
-     */
-    protected static function getTemplate(string $name, bool $minify = true) : self
-    {
-        $path = App::$DIR_TEMPLATES . "/{$name}.tpl";
-
-        self::$content = '';
-
-        if (is_file($path)) {
-
-            self::$content = ($minify) ? self::minify(file_get_contents($path)) : file_get_contents($path);
-
-        }
-
-        return self::$instance;
     }
 
     /**

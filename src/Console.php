@@ -4,10 +4,9 @@ namespace Val;
 
 Abstract Class Console
 {
-	// TODO: .htaccess generator
-	// TODO: config generator (w/ preference questions; if config == "auth" ---> create also a db table for the sessions)
+	// TODO: config generator (w/ preference questions; if config == "auth" ---> create also a migration w/ db table for the sessions)
 	// TODO: api generator  (w/ preference questions)
-	// TODO: make a migration
+	// TODO: create a migration
 
 	/**
 	 * Processes the CLI commands.
@@ -84,6 +83,9 @@ Abstract Class Console
 				if (!$method->isPublic())
 					continue;
 
+				if ($method->name == 'handle')
+					continue;
+
 				$commandsMethods[$command][] = [
 					'name' => $method->name,
 					'description' => self::getDescription($method->getDocComment())
@@ -95,13 +97,12 @@ Abstract Class Console
 
 		foreach ($commandsMethods as $command => $methods) {
 
+			if (!$methods)
+				continue;
+
 			self::println($command, '33');
 
 			foreach ($methods as $method) {
-
-				if ($method['name'] == 'handle')
-					continue;
-
 				self::print("  {$command}:{$method['name']}\t\t", '32');
 				self::println($method['description']);
 			}

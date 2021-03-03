@@ -24,6 +24,7 @@ Abstract Class App
     public static string $DIR_API;
     public static string $DIR_CONFIG;
     public static string $DIR_MIGRATIONS;
+    public static string $DIR_PUBLIC;
     public static string $DIR_RESOURCES;
     public static string $DIR_TEMPLATES;
 
@@ -44,6 +45,7 @@ Abstract Class App
         self::$DIR_API          = self::$DIR_ROOT . '/api';
         self::$DIR_CONFIG       = self::$DIR_ROOT . '/config';
         self::$DIR_MIGRATIONS   = self::$DIR_ROOT . '/migrations';
+        self::$DIR_PUBLIC       = self::$DIR_ROOT . '/public';
         self::$DIR_RESOURCES    = self::$DIR_ROOT . '/resources';
         self::$DIR_TEMPLATES    = self::$DIR_ROOT . '/templates';
 
