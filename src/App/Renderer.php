@@ -136,7 +136,7 @@ Final Class Renderer
 
         foreach ($matches as $match) {
 
-            $path = App::$DIR_TEMPLATES . "/{$match[1]}.tpl";
+            $path = App::$DIR_TEMPLATES . "/{$match[1]}";
 
             if (is_file($path)) {
 
