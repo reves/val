@@ -20,6 +20,9 @@ Final Class Renderer
     // Whether to minify loaded templates
     protected static bool $minify;
 
+    // Templates directory
+    protected static string $directoryPath = '';
+
     protected function __construct() {}
 
     /**
@@ -27,7 +30,19 @@ Final Class Renderer
      */
     public static function init() : self
     {
+        self::$directoryPath = App::$DIR_TEMPLATES;
+
         return self::$instance ?? self::$instance = new self;
+    }
+
+    /**
+     * Sets the path to the directory where templates are located.
+     */
+    public static function from(string $directoryPath) : self
+    {
+        self::$directoryPath = rtrim($directoryPath, '/');
+
+        return self::$instance;
     }
 
     /**
@@ -35,14 +50,14 @@ Final Class Renderer
      * 
      * @throws \RuntimeException
      */
-    public static function load(string $file, bool $minify = true, ?string $directoryPath = null) : self
+    public static function load(string $file, bool $minify = true) : self
     {
         self::reset();
         self::$minify = $minify;
-        $path = ($directoryPath ?? App::$DIR_TEMPLATES) . "/{$file}";
+        $path = self::$directoryPath . "/{$file}";
 
         if (!is_file($path))
-            throw new \RuntimeException("Template file \"{$file}\" is missing.");
+            throw new \RuntimeException("Template file \"{$file}\" is missing in templates directory.");
 
         self::$content = self::minify(file_get_contents($path)); // TODO: check file_get_contents for false value
 

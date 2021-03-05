@@ -4,10 +4,12 @@ namespace Val\Api;
 
 use MaxMind\Db\Reader;
 use Val\App\Config;
+use Val\App;
 
 Abstract Class Geolocation
 {
     protected static array $languages = ['en', 'ru', 'de', 'es', 'fr',  'ja', 'pt-BR', 'zh-CN'];
+    
     /**
      * Returns an associative array of geolocation data, based on given IP address. 
      * Returns null in case of an error.
@@ -21,7 +23,7 @@ Abstract Class Geolocation
      */
     public static function get(?string $ipAddress = null, ?string $lang = null) : ?array
     {
-        $reader = new Reader(Config::app('maxmind_db_file'));
+        $reader = new Reader(App::$DIR_RESOURCES . '/' . Config::resource('maxmind_db'));
 
         try {
 

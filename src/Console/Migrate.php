@@ -19,12 +19,12 @@ Abstract Class Migrate
 	protected static function init() : void
 	{
 		if (Config::db() === null) {
-			Console::println('Migration aborted! Database configuration file is missing.');
+			Console::println('Migration aborted! Database configuration file is missing.', '31');
 			App::exit();
 		}
 
 		if (!self::$dbTable = Config::db('table_migrations')) {
-			Console::println('Migration aborted! Database config field "table_migrations" not specified.');
+			Console::println('Migration aborted! Database config field "table_migrations" not specified.', '31');
 			App::exit();
 		}
 
@@ -45,7 +45,7 @@ Abstract Class Migrate
 		if ($applyVersion !== null) {
 
 			if (!preg_match('/^\d+$/', $applyVersion)) {
-				Console::println('Invalid version number.');
+				Console::println('Invalid version number.', '31');
 				return;
 			}
 
@@ -76,18 +76,18 @@ Abstract Class Migrate
 
 		foreach ($files as $file) {
 
-			list($version, $name) = explode('_', $file, 2);
+			@list($version, $name) = explode('_', $file, 2);
 
 			if (!$version = intval($version))
 				continue;
 
 			if (isset($migrations[$version])) {
-				Console::println("Migration aborted! Files of the same migration version found: \"{$migrations[$version]['file']}\" and \"{$file}\".");
+				Console::println("Migration aborted! Files of the same migration version found: \"{$migrations[$version]['file']}\" and \"{$file}\".", '31');
 				return;
 			}
 
 			if ($applyVersion && $version > $applyVersion) {
-				Console::println('Migration aborted! The file for the specified migration version was not found.');
+				Console::println('Migration aborted! The file for the specified migration version was not found.', '31');
 				return;
 			}
 
@@ -121,7 +121,7 @@ Abstract Class Migrate
 				->execute();
 
 			if (!$result) {
-				Console::println("Migration stopped! Failed to register version {$version} ({$migration['name']}) in the migrations table.");
+				Console::println("Migration stopped! Failed to register version {$version} ({$migration['name']}) in the migrations table.", '31');
 				return;
 			}
 
@@ -137,7 +137,7 @@ Abstract Class Migrate
 		if ($steps !== null) {
 
 			if (!preg_match('/^\d+$/', $steps)) {
-				Console::println('Invalid steps number.');
+				Console::println('Invalid steps number.', '31');
 				return;
 			}
 
@@ -156,7 +156,7 @@ Abstract Class Migrate
 		$c = count($appliedVersions);
 
 		if ($steps > $c) {
-			Console::println("Rollback aborted! The number of steps is greater than the number of applied migrations ({$c}).");
+			Console::println("Rollback aborted! The number of steps is greater than the number of applied migrations ({$c}).", '31');
 			return;
 		}
 
@@ -177,13 +177,13 @@ Abstract Class Migrate
 
 		foreach ($files as $file) {
 			
-			list($version, $name) = explode('_', $file, 2);
+			@list($version, $name) = explode('_', $file, 2);
 
 			if (!$version = intval($version))
 				continue;
 
 			if (isset($migrations[$version])) {
-				Console::println("Rollback aborted! Files of the same migration version found: \"{$migrations[$version]['file']}\" and \"{$file}\".");
+				Console::println("Rollback aborted! Files of the same migration version found: \"{$migrations[$version]['file']}\" and \"{$file}\".", '31');
 				return;
 			}
 
@@ -213,7 +213,7 @@ Abstract Class Migrate
 			$version = $version['Version'];
 
 			if (!isset($migrations[$version])) {
-				Console::println("Rollback step {$step} aborted! No migration file with version {$version} was found.");
+				Console::println("Rollback step {$step} aborted! No migration file with version {$version} was found.", '31');
 				return;
 			}
 
@@ -229,7 +229,7 @@ Abstract Class Migrate
 				->execute();
 
 			if (!$result || !DB::rowCount()) {
-				Console::println("Rollback stopped at step {$step}! Couldn't delete the version {$version} from the migrations table.");
+				Console::println("Rollback stopped at step {$step}! Couldn't delete the version {$version} from the migrations table.", '31');
 				return;
 			}
 

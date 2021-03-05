@@ -1,0 +1,7 @@
+<?php
+
+return [
+
+    'maxmind_db' => 'maxmind/GeoLite2-City.mmdb',
+
+];
