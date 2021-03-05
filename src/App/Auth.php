@@ -15,15 +15,15 @@ Final Class Auth
     protected function __construct()
     {
         // Get the encrypted authentication session data from the cookie.
-        if (Cookie::isSet(Config::account('auth_session_cookie_name'))) {
+        if (Cookie::isSet(Config::auth('session_cookie_name'))) {
 
-            self::$session = Token::extract(Cookie::get(Config::account('auth_session_cookie_name')));
+            self::$session = Token::extract(Cookie::get(Config::auth('session_cookie_name')));
 
             // The authentication session data decrypted and decoded successfully.
             if (self::$session !== null) {
 
                 // The authentication session did not expire yet.
-                if (!Token::expired(self::$session['signedInAt'], Config::account('auth_session_ttl_days'), Token::EXPIRED_DAYS)) {
+                if (!Token::expired(self::$session['signedInAt'], Config::auth('session_ttl_days'), Token::EXPIRED_DAYS)) {
                 
                     DB::prepare('SELECT EXISTS(SELECT 1 FROM val_auth_sessions WHERE Id = :sessionId) AS AuthSessionFound')
                         ->bind(':sessionId', self::$session['sessionId']);
@@ -41,7 +41,7 @@ Final Class Auth
                         ) {
 
                             // Update the authentication session.
-                            if (Token::expired(self::$session['lastSeenAt'], Config::account('auth_session_update_minutes'), Token::EXPIRED_MINUTES)) {
+                            if (Token::expired(self::$session['lastSeenAt'], Config::auth('session_update_minutes'), Token::EXPIRED_MINUTES)) {
 
                                 self::updateSession();
 
@@ -138,7 +138,7 @@ Final Class Auth
 
         $sessionToken = Token::create(self::$session);
 
-        if (Cookie::setForDays(Config::account('auth_session_cookie_name'), $sessionToken, Config::account('auth_session_ttl_days'))) {
+        if (Cookie::setForDays(Config::auth('session_cookie_name'), $sessionToken, Config::auth('session_ttl_days'))) {
 
             return true;
         }
@@ -178,7 +178,7 @@ Final Class Auth
 
         $sessionToken = Token::create($sessionUpdated);
 
-        if (Cookie::setForDays(Config::account('auth_session_cookie_name'), $sessionToken, Config::account('auth_session_ttl_days'))) {
+        if (Cookie::setForDays(Config::auth('session_cookie_name'), $sessionToken, Config::auth('session_ttl_days'))) {
 
             self::$session = $sessionUpdated;
             return true;
@@ -197,7 +197,7 @@ Final Class Auth
         // Remove invalid authentication session cookie.
         if (!self::$session) {
 
-            return Cookie::unset(Config::account('auth_session_cookie_name'));
+            return Cookie::unset(Config::auth('session_cookie_name'));
         }
 
         // Remove the authentication session from the database by given authentication 
@@ -208,7 +208,7 @@ Final Class Auth
             ->execute();
 
         if (!DB::rowCount()) {
-            
+
             return false;
         }
 
@@ -217,7 +217,7 @@ Final Class Auth
         if (!$sessionId || self::$session['sessionId'] == $sessionId) {
 
             self::$session = null;
-            Cookie::unset(Config::account('auth_session_cookie_name'));
+            Cookie::unset(Config::auth('session_cookie_name'));
 
         }
 
@@ -233,7 +233,7 @@ Final Class Auth
         // Remove invalid authentication session cookie.
         if (!self::$session) {
 
-            return Cookie::unset(Config::account('auth_session_cookie_name'));
+            return Cookie::unset(Config::auth('session_cookie_name'));
         }
 
         // Remove all the authentication sessions from the database.
@@ -249,7 +249,7 @@ Final Class Auth
         // Revoke the current authentication session and remove its authentication session
         // cookie.
         self::$session = null;
-        Cookie::unset(Config::account('auth_session_cookie_name'));
+        Cookie::unset(Config::auth('session_cookie_name'));
 
         return true;
     }
@@ -263,7 +263,7 @@ Final Class Auth
         // Remove invalid authentication session cookie.
         if (!self::$session) {
 
-            return Cookie::unset(Config::account('auth_session_cookie_name'));
+            return Cookie::unset(Config::auth('session_cookie_name'));
         }
 
         // Remove all the authentication sessions from the database, except the current one.

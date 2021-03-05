@@ -1,0 +1,10 @@
+<?php
+
+return [
+
+    /**
+     * Application secret key.
+     */
+    'key' => '{key}',
+
+];

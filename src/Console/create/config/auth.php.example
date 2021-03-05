@@ -1,0 +1,12 @@
+<?php
+
+return [
+
+    /**
+     * Authentication stateful session.
+     */
+    'session_cookie_name' => 'passport',
+    'session_ttl_days' => 365, // After this period the authentication session will be terminated.
+    'session_update_minutes' => 5, // The "last seen" data will be updated not more often than this period.
+
+];

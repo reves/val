@@ -80,23 +80,19 @@ Abstract Class App
     }
 
     /**
-     * Loads and calls the requested API's method.
+     * Loads and calls the requested API endpoint (& method).
      */
     protected static function loadApi() : Api
     {
-        $apiClassName = ucfirst($_GET['_api']) . 'Api';
-        $path = self::$DIR_API . "/{$apiClassName}.php";
+        $className = ucfirst($_GET['_api']);
+        $path = self::$DIR_API . "/{$className}.php";
 
         if (is_file($path)) {
 
             require $path;
+            $className = "\\$className";
 
-            if (isset($_GET['_action'])) {
-
-                return new $apiClassName($_GET['_action']);
-            }
-
-            return new $apiClassName;
+            return isset($_GET['_action']) ? new $className($_GET['_action']) : new $className;
         }
 
         return new Api;

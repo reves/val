@@ -9,7 +9,7 @@ Abstract Class Migrate
 {	
 	// TODO: Rollback last migration(s) [+bulk]; to a specific version number? (steps currently)
 	// TODO: migrate:status
-	// TODO: Ask for confirmation before executing
+	// TODO: ask for confirmation before executing
 
 	protected static ?string $dbTable;
 
@@ -65,7 +65,7 @@ Abstract Class Migrate
 			return;
 		}
 
-		$files = self::getFiles();
+		$files = self::_getFiles();
 
 		if (!$files) {
 			Console::println('No migration files found.');
@@ -160,7 +160,7 @@ Abstract Class Migrate
 			return;
 		}
 
-		$files = self::getFiles(true);
+		$files = self::_getFiles(true);
 
 		if (!$filesCount = count($files)) {
 			Console::println('No migration files found.');
@@ -242,7 +242,7 @@ Abstract Class Migrate
 	/**
 	 * Returns an array of migration files.
 	 */
-	protected static function getFiles(bool $desc = false) : array
+	public static function _getFiles(bool $desc = false) : array
 	{
 		return array_filter(
 			scandir(App::$DIR_MIGRATIONS, $desc ? SCANDIR_SORT_DESCENDING : null),

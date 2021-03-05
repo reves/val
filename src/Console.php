@@ -4,10 +4,6 @@ namespace Val;
 
 Abstract Class Console
 {
-	// TODO: config generator (w/ preference questions; if config == "auth" ---> create also a migration w/ db table for the sessions)
-	// TODO: api generator  (w/ preference questions)
-	// TODO: create a migration
-
 	/**
 	 * Processes the CLI commands.
 	 */
@@ -86,6 +82,9 @@ Abstract Class Console
 				if ($method->name == 'handle')
 					continue;
 
+				if ($method->name[0] == '_')
+					continue;
+
 				$commandsMethods[$command][] = [
 					'name' => $method->name,
 					'description' => self::getDescription($method->getDocComment())
@@ -93,13 +92,18 @@ Abstract Class Console
 			}
 		}
 
-		self::println();
+		if (!$commandsMethods) {
+			
+			self::println();
+			return;
+		}
 
 		foreach ($commandsMethods as $command => $methods) {
 
 			if (!$methods)
 				continue;
-
+			
+			self::println();
 			self::println($command, '33');
 
 			foreach ($methods as $method) {

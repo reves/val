@@ -43,7 +43,9 @@ Abstract Class Crypt
      */
     protected static function getSecretKey() : string
     {
-        return sodium_base642bin(Config::app('key'), \SODIUM_BASE64_VARIANT_ORIGINAL_NO_PADDING); // TODO: check if the config field is set
+        // TODO: check if the config field is set
+        // TODO: catch \SodiumException --- thrown if the secret key is corrupted or written incorrectly
+        return sodium_base642bin(Config::app('key'), \SODIUM_BASE64_VARIANT_ORIGINAL_NO_PADDING);
     }
 
 }
