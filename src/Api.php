@@ -110,7 +110,8 @@ Class Api
     }
 
     /**
-     * Warning (!) use this method only if a custom fail response is required.
+     * Attention (!) use this method only if a custom fail response is required. Check out 
+     * the standard methods setFail() and setWrong() first.
      * 
      * Used when there is a problem with the data provided, or if any precondition of 
      * the call has not been met. Sets the HTTP status code to "400 Bad Request", sends 
@@ -138,7 +139,7 @@ Class Api
     /**
      * Sets the specific status code and optional description which describe the reasons 
      * why data validation failed. The See the documentation for the self::respondFail() 
-     * method for details.
+     * method for details and response examples.
      */
     final protected function setFail(string $status, ?string $description = null) : self
     {
@@ -150,7 +151,7 @@ Class Api
     /**
      * Sets the description for the field whose value is not valid. The description 
      * contains a specific status code and mandatory parameters for the field. See the 
-     * documentation for the self::respondFail() method for details.
+     * documentation for the self::respondFail() method for details and response examples.
      */
     final protected function setWrong(string $field, string $status, ?array $params = null) : self
     {

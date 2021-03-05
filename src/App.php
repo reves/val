@@ -5,9 +5,9 @@ namespace Val;
 use Val\App\{CSRF, DB, Auth, Renderer};
 
 /**
- * Application entry point. Should be called from "public/index.php".
+ * Application entry point.
  * 
- * Usage example:
+ * Usage example (public/index.php):
  * 
  *  <?php
  *  require __DIR__.'/../vendor/autoload.php';
@@ -37,8 +37,6 @@ Abstract Class App
 
             return;
         }
-
-        require __DIR__.'/../vendor/autoload.php';
 
         self::$running = true;
         self::$DIR_ROOT         = $rootPath ?? ($_SERVER['DOCUMENT_ROOT'] ? $_SERVER['DOCUMENT_ROOT'].'/..' : getcwd());
