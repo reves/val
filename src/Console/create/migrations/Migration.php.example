@@ -5,14 +5,14 @@ use Val\App\DB;
 
 Class {name} Implements MigrationInterface
 {
-	public function up()
-	{
-		// Up
-	}
+    public function up()
+    {
+        // Up
+    }
 
-	public function down()
-	{
-		// Down
-	}
+    public function down()
+    {
+        // Down
+    }
 
 }

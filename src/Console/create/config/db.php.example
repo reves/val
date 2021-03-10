@@ -2,15 +2,15 @@
 
 return [
 
-	/**
+    /**
      * Database connection.
      */
     'host' => 'localhost',
-	'db' => 'database',
-	'user' => 'user',
-	'pass' => 'password',
+    'db' => 'database',
+    'user' => 'user',
+    'pass' => 'password',
 
-	'table_migrations' => 'migrations',
-	'table_auth' => 'auth'
+    'table_migrations' => 'migrations',
+    'table_auth' => 'auth'
 
 ];
