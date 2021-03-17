@@ -27,12 +27,12 @@ Abstract Class Cookie
     public static function set(string $name, string $value = '', array $options = []) : bool
     {
         $options = [
-            'expires' => $options['expires'] ?? 0,
-            'path' => $options['path'] ?? '/',
-            'domain' => $options['domain'] ?? $_SERVER['SERVER_NAME'] ?? '',
-            'secure' => $options['secure'] ?? true,
-            'httponly' => $options['httponly'] ?? true,
-            'samesite' => $options['samesite'] ?? 'Lax'
+            'expires'   => $options['expires']  ?? 0,
+            'path'      => $options['path']     ?? '/',
+            'domain'    => $options['domain']   ?? $_SERVER['SERVER_NAME'] ?? '',
+            'secure'    => $options['secure']   ?? true,
+            'httponly'  => $options['httponly'] ?? true,
+            'samesite'  => $options['samesite'] ?? 'Lax'
         ];
         
         return setcookie($name, $value, $options);

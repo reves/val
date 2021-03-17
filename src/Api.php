@@ -20,16 +20,16 @@ Class Api
 
     // The specific status code and optional description which describe the 
     // reasons why data validation failed.
-    private array $fail;
+    private array $fail = [];
 
     // List of missing but required fields.
-    private array $missing;
+    private array $missing = [];
 
     // List of fields with an invalid value.
-    private array $wrong;
+    private array $wrong = [];
 
     // Request data fields and their values.
-    private array $fields;
+    private array $fields = [];
 
     /**
      * Calls the requested API action method. Responds with an HTTP status code of 

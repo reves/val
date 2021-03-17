@@ -17,7 +17,7 @@ Abstract Class Device
      */
     public static function get(?string $userAgent = null) : array
     {
-        $data = get_browser($userAgent, true);
+        $data = @get_browser($userAgent, true);
 
         return [
             'type' =>       (!$data || $data['device_type'] == 'unknown') ? '' : mb_substr($data['device_type'], 0, 63),

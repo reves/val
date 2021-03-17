@@ -107,16 +107,6 @@ Abstract Class App
     }
 
     /**
-     * Generates a URL for the specified path using the application host name.
-     */
-    public static function buildUrlTo(string $path) : string
-    {
-        $path = trim(trim($path), '/');
-
-        return "https://{$_SERVER['SERVER_NAME']}/{$path}";
-    }
-
-    /**
      * Exits the application.
      */
     public static function exit() : void

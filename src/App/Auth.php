@@ -22,10 +22,10 @@ Final Class Auth
             // The authentication session data decrypted and decoded successfully.
             if (self::$session !== null) {
 
-                // The authentication session did not expire yet.
-                if (!Token::expired(self::$session['signedInAt'], Config::auth('session_ttl_days'), Token::EXPIRED_DAYS)) {
-                
-                    DB::prepare('SELECT EXISTS(SELECT 1 FROM val_auth_sessions WHERE Id = :sessionId) AS AuthSessionFound')
+                // The authentication session did not expire yet (user is still active).
+                if (!Token::expired(self::$session['lastSeenAt'], Config::auth('session_ttl_days'), Token::TIME_DAYS)) {
+
+                    DB::prepare('SELECT EXISTS(SELECT 1 FROM ' . Config::db('table_auth') . ' WHERE Id = UUID_TO_BIN(:sessionId)) AS AuthSessionFound')
                         ->bind(':sessionId', self::$session['sessionId']);
 
                     // The authentication session record was found in the database.
@@ -40,13 +40,13 @@ Final Class Auth
                             self::$session['device']['browser'] === mb_substr($device['browser'], 0, 63)
                         ) {
 
-                            // Update the authentication session.
-                            if (Token::expired(self::$session['lastSeenAt'], Config::auth('session_update_minutes'), Token::EXPIRED_MINUTES)) {
+                            // Update the authentication session data.
+                            if (Token::expired(self::$session['lastSeenAt'], Config::auth('session_update_minutes'), Token::TIME_MINUTES)) {
 
                                 self::updateSession();
 
                             }
-                            
+
                             // User successfully authenticated.
                             return;
                         }
@@ -54,8 +54,8 @@ Final Class Auth
                 }
             }
             
+            self::revokeSession(); // TODO: revoke all the expired sessions
             self::$session = null;
-            self::revokeSession();
         }
     }
 
@@ -74,7 +74,16 @@ Final Class Auth
     }
 
     /**
-     * Gets the id of the Authenticated user account, or null if the user is 
+     * Returns the authentication session id of the Authenticated user account, or null if 
+     * the user is Unauthenticated.
+     */
+    public static function getSessionId() : ?string
+    {
+        return self::$session['sessionId'] ?? null;
+    }
+
+    /**
+     * Returns the id of the Authenticated user account, or null if the user is 
      * Unauthenticated.
      */
     public static function getAccountId() : ?string
@@ -83,12 +92,51 @@ Final Class Auth
     }
 
     /**
-     * Gets the authentication session id of the Authenticated user account, or null if 
-     * the user is Unauthenticated.
+     * Returns the device info array, or null if the user is Unauthenticated.
+     * 
+     *  Returning array keys:
+     *      [
+     *          'type',
+     *          'platform',
+     *          'browser'
+     *      ]
+     * 
      */
-    public static function getSessionId() : ?string
+    public static function getDevice() : ?array
     {
-        return self::$session['sessionId'] ?? null;
+        return  self::$session['device'] ?? null;
+    }
+
+    /**
+     * Returns the dateTime of the initialization of the session.
+     */
+    public static function getSignedInAt() : ?string
+    {
+        return self::$session['signedInAt'] ?? null;
+    }
+
+    /**
+     * Returns the dateTime of the last session data update.
+     */
+    public static function getLastSeenAt() : ?string
+    {
+        return self::$session['lastSeenAt'] ?? null;
+    }
+
+    /**
+     * Returns the IP address that was when the session was initialized.
+     */
+    public static function getSignedInIPAddress() : ?string
+    {
+        return self::$session['signedInIPAddress'] ?? null;
+    }
+
+    /**
+     * Returns the IP address that was the last time the session data was updated.
+     */
+    public static function getLastSeenIPAddress() : ?string
+    {
+        return self::$session['lastSeenIPAddress'] ?? null;
     }
 
     /**
@@ -103,35 +151,36 @@ Final Class Auth
         $IPAddress = $_SERVER['REMOTE_ADDR'];
 
         // Save the authentication session data to the database.
-        DB::prepare('INSERT INTO val_auth_sessions (AccountId, DeviceType, DevicePlatform, DeviceBrowser, 
-                            SignedInAt, LastSeenAt, SignedInIPAddress, LastSeenIPAddress) 
-                            VALUES(:accountId, :deviceType, :devicePlatform, :deviceBrowser, :signedInAt, :lastSeenAt, 
-                            INET6_ATON(:signedInIPAddress), INET6_ATON(:lastSeenIPAddress))')
-            ->bindMultiple([
-                ':accountId' =>         $accountId,
-                ':deviceType' =>        $device['type'],
-                ':devicePlatform' =>    $device['platform'],
-                ':deviceBrowser' =>     $device['browser'],
-                ':signedInAt' =>        $timeNow,
-                ':lastSeenAt' =>        $timeNow,
-                ':signedInIPAddress' => $IPAddress,
-                ':lastSeenIPAddress' => $IPAddress
-            ])->execute();
+        $sessionId = DB::prepare('SELECT UUID() AS UUID')->single()['UUID'];
+        $result = DB::prepare('INSERT INTO ' . Config::db('table_auth') . ' (Id, AccountId, DeviceType, DevicePlatform, 
+                                DeviceBrowser, SignedInAt, LastSeenAt, SignedInIPAddress, LastSeenIPAddress) 
+                                VALUES( UUID_TO_BIN(:id), :accountId, :deviceType, :devicePlatform, :deviceBrowser, 
+                                :signedInAt, :lastSeenAt, INET6_ATON(:signedInIPAddress), INET6_ATON(:lastSeenIPAddress))')
+        ->bindMultiple([
+            ':id'                   => $sessionId,
+            ':accountId'            => $accountId,
+            ':deviceType'           => $device['type'],
+            ':devicePlatform'       => $device['platform'],
+            ':deviceBrowser'        => $device['browser'],
+            ':signedInAt'           => $timeNow,
+            ':lastSeenAt'           => $timeNow,
+            ':signedInIPAddress'    => $IPAddress,
+            ':lastSeenIPAddress'    => $IPAddress
+        ])
+        ->execute();
 
-        $sessionId = DB::lastInsertId();
-
-        if (!$sessionId) {
+        if (!$result) {
 
             return false;
         }
 
         // Save the autnhentication session data to the authentication session cookie.
         self::$session = [
-            'sessionId' =>  $sessionId,
-            'accountId' =>  $accountId,
-            'device' =>     $device,
-            'signedInAt' => $timeNow,
-            'lastSeenAt' => $timeNow,
+            'sessionId'         => $sessionId,
+            'accountId'         => $accountId,
+            'device'            => $device,
+            'signedInAt'        => $timeNow,
+            'lastSeenAt'        => $timeNow,
             'signedInIPAddress' => $IPAddress,
             'lastSeenIPAddress' => $IPAddress
         ];
@@ -158,8 +207,8 @@ Final Class Auth
         $IPAddress = $_SERVER['REMOTE_ADDR'];
 
         // Update the authentication session "last seen" data in the database.
-        DB::prepare('UPDATE val_auth_sessions SET LastSeenAt = :lastSeenAt, LastSeenIPAddress = INET6_ATON(:lastSeenIPAddress) 
-                            WHERE Id = :sessionId')
+        DB::prepare('UPDATE ' . Config::db('table_auth') . ' SET LastSeenAt = :lastSeenAt, LastSeenIPAddress = INET6_ATON(:lastSeenIPAddress) 
+                            WHERE Id = UUID_TO_BIN(:sessionId)')
             ->bind(':lastSeenAt', $timeNow)
             ->bind(':lastSeenIPAddress', $IPAddress)
             ->bind(':sessionId', self::getSessionId())
@@ -202,7 +251,7 @@ Final Class Auth
 
         // Remove the authentication session from the database by given authentication 
         // session id or by the current authentication session id.
-        DB::prepare('DELETE FROM val_auth_sessions WHERE Id = :sessionId AND AccountId = :accountId')
+        DB::prepare('DELETE FROM ' . Config::db('table_auth') . ' WHERE Id = UUID_TO_BIN(:sessionId) AND AccountId = :accountId')
             ->bind(':sessionId', $sessionId ?? self::$session['sessionId'])
             ->bind(':accountId', self::$session['accountId'])
             ->execute();
@@ -237,7 +286,7 @@ Final Class Auth
         }
 
         // Remove all the authentication sessions from the database.
-        DB::prepare('DELETE FROM val_auth_sessions WHERE AccountId = :accountId')
+        DB::prepare('DELETE FROM ' . Config::db('table_auth') . ' WHERE AccountId = :accountId')
             ->bind(':accountId', self::$session['accountId'])
             ->execute();
         
@@ -267,7 +316,7 @@ Final Class Auth
         }
 
         // Remove all the authentication sessions from the database, except the current one.
-        DB::prepare('DELETE FROM val_auth_sessions WHERE AccountId = :accountId AND Id <> :sessionId')
+        DB::prepare('DELETE FROM ' . Config::db('table_auth') . ' WHERE AccountId = :accountId AND Id <> UUID_TO_BIN(:sessionId)')
             ->bind(':sessionId', self::$session['sessionId'])
             ->bind(':accountId', self::$session['accountId'])
             ->execute();

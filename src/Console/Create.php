@@ -24,7 +24,7 @@ Abstract Class Create
 
         $indexFilePath = App::$DIR_PUBLIC . '/index.php';
         $htaccessFilePath = App::$DIR_PUBLIC . '/.htaccess';
-        
+
         if (is_file($indexFilePath) && is_file($htaccessFilePath)) {
 
             Console::println('All the base files for the application already exist.');
@@ -106,7 +106,7 @@ Abstract Class Create
 
         if ($name == 'auth' && (!is_file(APP::$DIR_CONFIG . '/db.php') || !is_file(APP::$DIR_CONFIG . '/app.php'))) {
 
-            Console::println('Failed to create a new config file! Both the db.php and app.php configs are required before auth.php is created.', '31'); // TODO: create these files automatically
+            Console::println('Failed to create a new config file! Both the "db" and "app" configs are required before "auth" is created.', '31'); // TODO: create these files automatically
             return false;
         }
 
@@ -114,7 +114,7 @@ Abstract Class Create
             'app'	=> 'app.php.example',
             'auth'	=> 'auth.php.example',
             'db'	=> 'db.php.example',
-            'resource'	=> 'resource.php.example',
+            'res'	=> 'res.php.example',
             default	=> 'config.php.example'
         };
 

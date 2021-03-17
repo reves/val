@@ -6,9 +6,9 @@ use DateTime;
 
 Abstract Class Token
 {
-    const EXPIRED_DAYS = 'days';
-    const EXPIRED_HOURS = 'hours';
-    const EXPIRED_MINUTES = 'minutes';
+    const TIME_DAYS = 'days';
+    const TIME_HOURS = 'hours';
+    const TIME_MINUTES = 'minutes';
 
     /**
      * Creates a new token by encoding $data in JSON format and encrypting it. Returns 
@@ -48,14 +48,14 @@ Abstract Class Token
         $diff = (new DateTime($createdAt))->diff(new DateTime());
 
         switch ($timeScale) {
-            case (self::EXPIRED_DAYS):
+            case (self::TIME_DAYS):
                 return ($diff->days >= $timeToLive);
 
-            case (self::EXPIRED_HOURS):
+            case (self::TIME_HOURS):
                 $diffHours = ($diff->days * 24) + $diff->h;
                 return ($diffHours >= $timeToLive);
 
-            case (self::EXPIRED_MINUTES):
+            case (self::TIME_MINUTES):
                 $diffMinutes = ($diff->days * 24 * 60) + ($diff->h * 60) + $diff->i;
                 return ($diffMinutes >= $timeToLive);
         }
