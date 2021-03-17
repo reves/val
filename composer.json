@@ -1,7 +1,7 @@
 {
     "name": "reves/val",
     "description": "Backend PHP Framework",
-    "keywords": ["ley", "framework"],
+    "keywords": ["val", "framework"],
     "license": "MIT",
     "type": "library",
     "require": {
