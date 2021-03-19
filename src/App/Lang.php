@@ -26,7 +26,7 @@ Abstract Class Lang
             isset($_SERVER['HTTP_ACCEPT_LANGUAGE']) && 
             self::$code = self::parse(strtok(strtok($_SERVER['HTTP_ACCEPT_LANGUAGE'], ','), ';'))
         ) {
-            Cookie::setForDays(self::COOKIE, self::$code, 365);
+            Cookie::setForDays(self::COOKIE, self::$code, 365, ['httponly' => false]);
             return;
         }
 
