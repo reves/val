@@ -42,7 +42,7 @@ Final Class DB
 
         ($host = Config::db('host')) && self::$dsn .= "host={$host};";
         ($port = Config::db('port')) && self::$dsn .= "port={$port};";
-        ($db = Config::db('db')) && self::$dsn .= "dbname={$db};";
+        ($db = Config::db('db'))     && self::$dsn .= "dbname={$db};";
         ($user = Config::db('user')) && self::$dsn .= "user={$user};";
         ($pass = Config::db('pass')) && self::$dsn .= "password={$pass};";
 

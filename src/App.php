@@ -2,7 +2,7 @@
 
 namespace Val;
 
-use Val\App\{CSRF, DB, Auth, Renderer};
+use Val\App\{Lang, CSRF, DB, Auth, Renderer};
 
 /**
  * Application entry point.
@@ -53,6 +53,7 @@ Abstract Class App
         header('X-Content-Type-Options: nosniff');
         header('X-Frame-Options: DENY');
 
+        Lang::init();
         CSRF::init();
         DB::init();
         Auth::init();
