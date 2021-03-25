@@ -2,6 +2,7 @@
 
 namespace Val;
 
+use DateTime;
 use Val\App\{JSON, CSRF, Auth};
 
 Class Api
@@ -338,6 +339,14 @@ Class Api
         }
 
         return $this->respondOnFail();
+    }
+
+    /**
+     * Returns dateTime formatted according to ISO 8601 format.
+     */
+    final public static function dateTime(?string $dateTime = null) : string
+    {
+        return (new DateTime($dateTime))->format(DateTime::ATOM);
     }
 
 }

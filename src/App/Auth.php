@@ -148,7 +148,7 @@ Final Class Auth
     {
         $device = Device::get();
         $timeNow = DB::dateTime();
-        $IPAddress = $_SERVER['REMOTE_ADDR'];
+        $IPAddress = $_SERVER['REMOTE_ADDR'] ?? '';
 
         // Save the authentication session data to the database.
         $sessionId = DB::prepare('SELECT UUID() AS UUID')->single()['UUID'];
@@ -204,7 +204,7 @@ Final Class Auth
     public static function updateSession() : bool
     {
         $timeNow = DB::dateTime();
-        $IPAddress = $_SERVER['REMOTE_ADDR'];
+        $IPAddress = $_SERVER['REMOTE_ADDR'] ?? '';
 
         // Update the authentication session "last seen" data in the database.
         DB::prepare('UPDATE ' . Config::db('table_auth') . ' SET LastSeenAt = :lastSeenAt, LastSeenIPAddress = INET6_ATON(:lastSeenIPAddress) 

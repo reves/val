@@ -29,7 +29,7 @@ Abstract Class Cookie
         $options = [
             'expires'   => $options['expires']  ?? 0,
             'path'      => $options['path']     ?? '/',
-            'domain'    => $options['domain']   ?? $_SERVER['SERVER_NAME'] ?? '',
+            'domain'    => $options['domain']   ?? '',
             'secure'    => $options['secure']   ?? true,
             'httponly'  => $options['httponly'] ?? true,
             'samesite'  => $options['samesite'] ?? 'Lax'

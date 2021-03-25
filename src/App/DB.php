@@ -221,7 +221,7 @@ Final Class DB
     }
 
     /**
-     * Gets the array containing all of the result set rows.
+     * Returns the array containing all of the result set rows.
      * 
      * Result example: (using PDO::FETCH_ASSOC)
      * 
@@ -239,8 +239,8 @@ Final Class DB
     }
 
     /**
-     * Gets the array containing first row of the result set rows. Returns null in case of 
-     * an empty result or an error.
+     * Returns the array containing first row of the result set rows. Returns null in case 
+     * of an empty result or an error.
      * 
      * Result example: (using PDO::FETCH_ASSOC)
      * 
@@ -257,8 +257,8 @@ Final Class DB
     }
 
     /**
-     * Gets the number of rows affected by the last SQL statement. Warning(!) when 
-     * PDO::MYSQL_ATTR_FOUND_ROWS is set to true, it gets the number of found (matched) 
+     * Returns the number of rows affected by the last SQL statement. Warning(!) when 
+     * PDO::MYSQL_ATTR_FOUND_ROWS is set to true, it returns the number of found (matched) 
      * rows, not the number of changed rows.
      */
     public static function rowCount() : int
@@ -267,7 +267,7 @@ Final Class DB
     }
 
     /**
-     * Gets the current dateTime matching the MySQL "YYYY-MM-DD hh:mm:ss" format.
+     * Returns the current dateTime matching the MySQL "YYYY-MM-DD hh:mm:ss" format.
      */
     public static function dateTime() : string
     {
