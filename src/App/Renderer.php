@@ -30,7 +30,7 @@ Final Class Renderer
      */
     public static function init() : self
     {
-        self::$directoryPath = App::$DIR_TEMPLATES;
+        self::$directoryPath = App::$DIR_VIEW;
 
         return self::$instance ?? self::$instance = new self;
     }
@@ -55,9 +55,10 @@ Final Class Renderer
         self::reset();
         self::$minify = $minify;
         $path = self::$directoryPath . "/{$file}";
+        $directoryPath = self::$directoryPath;
 
         if (!is_file($path))
-            throw new \RuntimeException("Template file \"{$file}\" is missing in templates directory.");
+            throw new \RuntimeException("Template file \"{$file}\" is missing in \"{$directoryPath}\" directory.");
 
         self::$content = self::minify(file_get_contents($path)); // TODO: check file_get_contents for false value
 
@@ -151,7 +152,7 @@ Final Class Renderer
 
         foreach ($matches as $match) {
 
-            $path = App::$DIR_TEMPLATES . "/{$match[1]}";
+            $path = self::$directoryPath . "/{$match[1]}";
 
             if (is_file($path)) {
 

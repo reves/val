@@ -26,7 +26,7 @@ Abstract Class App
     public static string $DIR_MIGRATIONS;
     public static string $DIR_PUBLIC;
     public static string $DIR_RESOURCES;
-    public static string $DIR_TEMPLATES;
+    public static string $DIR_VIEW;
 
     /**
      * Starts the application by loading the View or the requested API.
@@ -45,7 +45,7 @@ Abstract Class App
         self::$DIR_MIGRATIONS   = self::$DIR_ROOT . '/migrations';
         self::$DIR_PUBLIC       = self::$DIR_ROOT . '/public';
         self::$DIR_RESOURCES    = self::$DIR_ROOT . '/resources';
-        self::$DIR_TEMPLATES    = self::$DIR_ROOT . '/templates';
+        self::$DIR_VIEW         = self::$DIR_ROOT . '/view';
 
         date_default_timezone_set('UTC');
         header('Cache-Control: no-store, must-revalidate');
