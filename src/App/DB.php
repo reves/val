@@ -104,7 +104,7 @@ Final Class DB
      */
     public static function commit() : bool
     {
-        return (!self::$transactionActive) ? true : self::$transactionActive = !self::$handler->commit();
+        return (!self::$transactionActive) ? true : !(self::$transactionActive = !self::$handler->commit());
     }
 
     /**
