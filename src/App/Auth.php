@@ -148,7 +148,20 @@ Final Class Auth
     {
         $device = Device::get();
         $timeNow = DB::dateTime();
-        $IPAddress = $_SERVER['REMOTE_ADDR'] ?? '';
+        $IPAddress = '';
+
+        // Get IP address of the client.
+        $addressHeaders = ['HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR',
+			'HTTP_X_FORWARDED', 'HTTP_X_CLUSTER_CLIENT_IP',
+			'HTTP_FORWARDED_FOR', 'HTTP_FORWARDED', 'REMOTE_ADDR'];
+
+		foreach ($addressHeaders as $header) {
+			if (array_key_exists($header, $_SERVER)) {
+				$addressChain = explode(',', $_SERVER[$header]);
+				$IPAddress = trim($addressChain[0]);
+				break;
+			}
+		}
 
         // Save the authentication session data to the database.
         $sessionId = DB::prepare('SELECT UUID() AS UUID')->single()['UUID'];

@@ -2,6 +2,8 @@
 
 namespace Val\App;
 
+use Val\App;
+
 Abstract Class Device
 {
     /**
@@ -17,7 +19,14 @@ Abstract Class Device
      */
     public static function get(?string $userAgent = null) : array
     {
-        $data = @get_browser($userAgent, true);
+        $data = null;
+        $path = App::$DIR_RESOURCES . "/browscap.ini";
+
+        if (is_file($path)) {
+
+            ini_set('browscap', $path);
+            $data = @get_browser($userAgent, true);
+        }
 
         return [
             'type' =>       (!$data || $data['device_type'] == 'unknown') ? '' : mb_substr($data['device_type'], 0, 63),
