@@ -7,4 +7,10 @@ return [
      */
     'key' => '{key}',
 
+    /**
+     * Supported languages. The first language code in the list is the default
+     * one.
+     */
+    'languages' => ['en'],
+
 ];

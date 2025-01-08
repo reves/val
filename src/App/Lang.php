@@ -2,12 +2,55 @@
 
 namespace Val\App;
 
+use Val\App;
+
 Abstract Class Lang
 {
     const COOKIE_NAME = 'lang';
 
     // Language code
     protected static ?string $code = null;
+
+    /**
+     * Detects the user preferred language. Manages the language code in the 
+     * URL path.
+     */
+    public static function init() : void
+    {
+        // Already set
+        if (self::$code)
+            return;
+
+        // Detect language code
+        self::detect();
+
+        // Handle language code in the URL path.
+
+        if (App::isApi() || !Config::app('languages'))
+            return;
+
+        $code = strtok($_SERVER["REQUEST_URI"], '/');
+        $parsed = self::parse($code);
+
+        // Language code is not present in the URL path or is invalid or is not
+        // supported.
+        if (!$parsed)
+            return;
+
+        // Parsed language code does not correspond to the detected one, so
+        // remove it from the URL path.
+        if ($parsed != self::$code) {
+            header('Location: ' . substr($_SERVER["REQUEST_URI"], strlen($code)+1), true, 302);
+            return;
+        }
+
+        // Language code in the URL path is similar to the detected one, but
+        // not exact (e.g. different region), so replace it with the detected
+        // one.
+        if ($code != self::$code) {
+            header('Location: /' . $parsed . substr($_SERVER["REQUEST_URI"], strlen($code)+1), true, 302);
+        }
+    }
 
     /**
      * Detects the language code from the cookie. If the cookie is not set
@@ -17,38 +60,31 @@ Abstract Class Lang
      * is still not supported, sets the first language code from the supported
      * languages list. Otherwise unsets the cookie.
      */
-    public static function init() : void
+    protected static function detect() : bool
     {
-        // Already set
-        if (self::$code)
-            return;
-
-        // Detect from cookie
+        // From cookie
         if (
             Cookie::isSet(self::COOKIE_NAME) &&
             self::$code = self::parse(Cookie::get(self::COOKIE_NAME))
         ) {
-            self::updateCookie();
-            return;
+            return self::updateCookie();
         }
 
-        // Detect from 'Accept-Language' header
+        // From 'Accept-Language' header
         if (
             isset($_SERVER['HTTP_ACCEPT_LANGUAGE']) && 
             self::$code = self::parse(strtok(strtok($_SERVER['HTTP_ACCEPT_LANGUAGE'], ','), ';'))
         ) {
-            self::updateCookie();
-            return;
+            return self::updateCookie();
         }
 
         // Default supported language
         if (Config::app('languages')) {
             self::$code = Config::app('languages')[0];
-            self::updateCookie();
-            return;
+            return self::updateCookie();
         }
 
-        Cookie::unset(self::COOKIE_NAME);
+        return Cookie::unset(self::COOKIE_NAME);
     }
 
     /**
@@ -93,10 +129,10 @@ Abstract Class Lang
      * Valid format:
      *  <ISO 639 language code>[-<ISO 3166-1 region code>]
      */
-    protected static function parse(string $code) : ?string
-    {   
+    protected static function parse(string|bool $code) : ?string
+    {
         // Invalid format
-        if (!preg_match('/^([a-z]{2,3})(?:-[A-Z]{2})?$/', $code, $m))
+        if (!$code || !preg_match('/^([a-z]{2,3})(?:-[A-Z]{2})?$/', $code, $m))
             return null;
 
         // Valid format

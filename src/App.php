@@ -6,13 +6,6 @@ use Val\App\{Lang, CSRF, DB, Auth, Renderer};
 
 /**
  * Application entry point.
- * 
- * Usage example (public/index.php):
- * 
- *  <?php
- *  require __DIR__.'/../vendor/autoload.php';
- *  Val\App::run(function() { echo 'Hello, World!'; });
- * 
  */
 Abstract Class App
 {
@@ -33,47 +26,58 @@ Abstract Class App
      */
     public static function run(?\Closure $view = null, ?string $rootPath = null) : void
     {
-        if (self::$running) {
-
+        if (self::$running)
             return;
-        }
 
         self::$running = true;
-        self::$DIR_ROOT         = $rootPath ?? ($_SERVER['DOCUMENT_ROOT'] ? $_SERVER['DOCUMENT_ROOT'].'/..' : getcwd());
-        self::$DIR_API          = self::$DIR_ROOT . '/api';
-        self::$DIR_CONFIG       = self::$DIR_ROOT . '/config';
-        self::$DIR_MIGRATIONS   = self::$DIR_ROOT . '/migrations';
-        self::$DIR_PUBLIC       = self::$DIR_ROOT . '/public';
-        self::$DIR_RESOURCES    = self::$DIR_ROOT . '/resources';
-        self::$DIR_VIEW         = self::$DIR_ROOT . '/view';
 
+        // Directories
+        self::$DIR_ROOT       = $rootPath ?? ($_SERVER['DOCUMENT_ROOT']
+                                        ? ($_SERVER['DOCUMENT_ROOT'] . '/..')
+                                        : getcwd());
+        self::$DIR_API        = self::$DIR_ROOT . '/api';
+        self::$DIR_CONFIG     = self::$DIR_ROOT . '/config';
+        self::$DIR_MIGRATIONS = self::$DIR_ROOT . '/migrations';
+        self::$DIR_PUBLIC     = self::$DIR_ROOT . '/public';
+        self::$DIR_RESOURCES  = self::$DIR_ROOT . '/resources';
+        self::$DIR_VIEW       = self::$DIR_ROOT . '/view';
+
+        // Timezone
         date_default_timezone_set('UTC');
+
+        // Common headers
         header('Cache-Control: no-store, must-revalidate');
-        header('Strict-Transport-Security: max-age=300'); // Details: https://hstspreload.org/
+        header('Strict-Transport-Security: max-age=31536000'); // Details: https://hstspreload.org/
         header('X-Content-Type-Options: nosniff');
         header('X-Frame-Options: DENY');
 
+        // Initialize modules
         Lang::init();
         CSRF::init();
         DB::init();
         Auth::init();
         Renderer::init();
 
-        if (isset($_GET['_api'])) {
+        if (App::isApi()) {
 
+            // API specific headers
             header('Content-type: application/json; charset=utf-8');
+
             self::loadApi();
 
             return;
         }
 
+        // View specific headers
         header('Content-Type: text/html; charset=utf-8');
         header('Referrer-Policy: origin, strict-origin');
         header('X-XSS-Protection: 1; mode=block');
 
         if ($view) {
 
-            $view(); // It is recommended to use 'Content-Security-Policy'
+            // (!) It is recommended to set 'Content-Security-Policy' header in
+            // the view function.
+            $view();
 
         }
     }
@@ -108,9 +112,17 @@ Abstract Class App
     }
 
     /**
+     * Checks if the current request is an API request.
+     */
+    public static function isApi() : bool
+    {
+        return isset($_GET['_api']);
+    }
+
+    /**
      * Exits the application.
      */
-    public static function exit() : void
+    public static function exit() : never
     {
         DB::close();
         exit;
