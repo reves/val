@@ -40,12 +40,17 @@ Abstract Class Crypt
 
     /**
      * Returns the application secret key.
+     * 
+     * @throws \LogicException
      */
     protected static function getSecretKey() : string
     {
-        // TODO: check if the config field is set
-        // TODO: catch \SodiumException --- thrown if the secret key is corrupted or written incorrectly
-        return sodium_base642bin(Config::app('key'), \SODIUM_BASE64_VARIANT_ORIGINAL_NO_PADDING);
+        $encryptedKey = Config::app('key');
+
+        if (!$encryptedKey)
+            throw new \LogicException('The application secret key is not set.');
+
+        return sodium_base642bin($encryptedKey, \SODIUM_BASE64_VARIANT_ORIGINAL_NO_PADDING);
     }
 
 }

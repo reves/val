@@ -60,7 +60,12 @@ Final Class Renderer
         if (!is_file($path))
             throw new \RuntimeException("Template file \"{$file}\" is missing in \"{$directoryPath}\" directory.");
 
-        self::$content = self::minify(file_get_contents($path)); // TODO: check file_get_contents for false value
+        $contents = file_get_contents($path);
+
+        if ($contents === false)
+            throw new \RuntimeException("Failed to read template file \"{$file}\" in \"{$directoryPath}\" directory.");
+
+        self::$content = self::minify($contents);
 
         return self::$instance;
     }
