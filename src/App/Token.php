@@ -6,60 +6,55 @@ use DateTime;
 
 Abstract Class Token
 {
-    const TIME_DAYS = 'days';
-    const TIME_HOURS = 'hours';
+    const TIME_SECONDS = 'seconds';
     const TIME_MINUTES = 'minutes';
+    const TIME_HOURS = 'hours';
+    const TIME_DAYS = 'days';
 
     /**
-     * Creates a new token by encoding $data in JSON format and encrypting it. Returns 
-     * null in case of an error.
+     * Creates a new token by encoding data in JSON format and encrypting it.
+     * Returns null in case of an error.
      */
     public static function create(array $data) : ?string
     {
-        $dataEncoded = JSON::encode($data);
-
-        return ($dataEncoded === null) ? null : Crypt::encrypt($dataEncoded);
+        return Crypt::encrypt(JSON::encode($data));
     }
 
     /**
-     * Extracts data from the $token by decrypting it and decoding from JSON format. 
-     * Returns null in case of an error.
+     * Extracts data from the token by decrypting it and decoding from JSON
+     * format. Returns null in case of an error.
      */
     public static function extract(string $token) : ?array
     {
-        $dataEncoded = Crypt::decrypt($token);
-
-        if ($dataEncoded === null) {
-
-            return null;
-        }
-
-        return JSON::decode($dataEncoded) ?? null;
+        return $token ? JSON::decode(Crypt::decrypt($token)) : null;
     }
 
     /**
-     * Checks if a token has expired based on its creation time and time to live (TTL). 
-     * The time scale for TTL must be specified using a class constant.
+     * Checks if a token has expired based on its creation time and time to 
+     * live (TTL). The time scale for TTL must be specified using one of the
+     * class constants.
      * 
      * @throws \InvalidArgumentException
      */
     public static function expired(string $createdAt, int $timeToLive, string $timeScale) : bool
     {
-        $diff = (new DateTime($createdAt))->diff(new DateTime());
+        $diffInSeconds = time() - strtotime($createdAt);
 
         switch ($timeScale) {
-            case (self::TIME_DAYS):
-                return ($diff->days >= $timeToLive);
 
-            case (self::TIME_HOURS):
-                $diffHours = ($diff->days * 24) + $diff->h;
-                return ($diffHours >= $timeToLive);
+            case (self::TIME_SECONDS):
+                return ($diffInSeconds >= $timeToLive);
 
             case (self::TIME_MINUTES):
-                $diffMinutes = ($diff->days * 24 * 60) + ($diff->h * 60) + $diff->i;
-                return ($diffMinutes >= $timeToLive);
+                return ($diffInSeconds >= $timeToLive * 60);
+
+            case (self::TIME_HOURS):
+                return ($diffInSeconds >= $timeToLive * 3600);
+
+            case (self::TIME_DAYS):
+                return ($diffInSeconds >= $timeToLive * 86400);
         }
 
-        throw new \InvalidArgumentException('The "string $timeScale" parameter must be one of the predefined class constants.');
+        throw new \InvalidArgumentException('The "$timeScale" parameter must be one of the predefined class constants.');
     }
 }

@@ -8,7 +8,7 @@ Abstract Class JSON
      * Returns a string containing the JSON representation of the supplied data array, 
      * or null in case of error. Detailed information on encoding options is available 
      * at https://riptutorial.com/php/example/2019/encoding-a-json-string.
-     * Warning (!) it is desirable that the data array be associative.
+     * Warning (!) it is desirable data array to be associative.
      */
     public static function encode(array $data) : ?string
     {
@@ -38,10 +38,7 @@ Abstract Class JSON
      */
     public static function decode(?string $json) : ?array
     {
-        if (!$json) {
-
-            return null;
-        }
+        if (!$json) return null;
 
         try {
 

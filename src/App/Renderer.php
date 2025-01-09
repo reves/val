@@ -23,7 +23,7 @@ Final Class Renderer
     // Templates directory
     protected static string $directoryPath = '';
 
-    protected function __construct() {}
+    protected function __construct() {} // for convenience of using object operator
 
     /**
      * Initializes the Renderer module.

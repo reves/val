@@ -6,14 +6,25 @@ Abstract Class Crypt
 {
     /**
      * Encrypts a message in a Secret-key Authenticated Encryption way. Returns a Base64 
-     * URL safe no padding encoded string.
+     * URL safe no padding encoded string or null in case of an error.
      */
-    public static function encrypt(string $message) : string
+    public static function encrypt(?string $message) : ?string
     {
-        $nonce = random_bytes(\SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
-        $encryptedMessage  = sodium_crypto_secretbox($message, $nonce, self::getSecretKey());
+        if (!$message)
+            return null;
 
-        return sodium_bin2base64($nonce . $encryptedMessage , \SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
+        try {
+
+            $nonce = random_bytes(\SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+            $encryptedMessage  = sodium_crypto_secretbox($message, $nonce, self::getSecretKey());
+            $encoded = sodium_bin2base64($nonce . $encryptedMessage , \SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
+
+        } catch(\Random\RandomException | \SodiumException) {
+
+            return null;
+        }
+
+        return $encoded;
     }
 
     /**
@@ -35,7 +46,7 @@ Abstract Class Crypt
             return null;
         }
 
-        return ($decryptedMessage !== false) ? $decryptedMessage  : null;
+        return ($decryptedMessage === false) ? null : $decryptedMessage;
     }
 
     /**

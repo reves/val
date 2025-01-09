@@ -6,7 +6,7 @@ use Val\App;
 
 Abstract Class Lang
 {
-    const COOKIE_NAME = 'lang';
+    const string COOKIE_NAME = 'lang';
 
     // Language code
     protected static ?string $code = null;

@@ -4,10 +4,11 @@ namespace Val\App;
 
 Abstract Class CSRF
 {
-    const COOKIE_NAME = '__Secure-csrftoken';
+    const string COOKIE_NAME = '__Secure-csrftoken';
 
     /**
-     * Sets the CSRF token cookie if not set.
+     * Sets the CSRF token cookie if not set. Does nothing, if the app config
+     * is missing.
      */
     public static function init() : void
     {
@@ -17,19 +18,19 @@ Abstract Class CSRF
         if (Cookie::isSet(self::COOKIE_NAME) && Crypt::decrypt(Cookie::get(self::COOKIE_NAME)))
             return;
 
-        Cookie::set(
-            self::COOKIE_NAME,
-            Crypt::encrypt(random_bytes(32)),
-            [
-                'httponly' => false,
-                'samesite' => 'Strict'
-            ]
-        );
+        try {
+
+            Cookie::set(self::COOKIE_NAME, Crypt::encrypt(random_bytes(32)), ['httponly' => false, 'samesite' => 'Strict']);
+
+        } catch (\Random\RandomException) {
+
+            return;
+        }
     }
 
     /**
-     * Returns true if the CSRF token from the cookie matches the CSRF token from the 
-     * HTTP header, otherwise returns false.
+     * Returns true if the CSRF token from the cookie matches the CSRF token
+     * from the HTTP header, otherwise returns false.
      */
     public static function tokensMatch() : bool
     {
