@@ -2,89 +2,438 @@
 
 namespace Val\App;
 
-Final Class Auth
+Abstract Class Auth
 {
-    protected static ?self $instance = null;
+    const string COOKIE_NAME = '__Host-passport';
+    const int SESSION_LIFETIME_DAYS = 365;
+    const int SESSION_MAX_OFFLINE_DAYS = 7;
+    const int TOKEN_TRUST_SECONDS = 5;
+    const int SESSION_UPDATE_SECONDS = 30;
+    const int MAX_ACTIVE_SESSIONS = 30;
 
-    // Authentication session data
+    // Authentication session data.
     protected static ?array $session = null;
 
     /**
-     * Identifies the authentication session cookie and tries to authenticate the user.
+     * Initializes the authentication module and tries to authenticate the
+     * user. Does nothing, if DB module not initialized or the auth config is
+     * missing.
+     * 
+     * @throws \LogicException
      */
-    protected function __construct()
+    public static function init() : void
     {
-        // Get the encrypted authentication session data from the cookie.
-        if (Cookie::isSet(Config::auth('session_cookie_name'))) {
+        // Already authenticated.
+        if (self::$session)
+            return;
 
-            self::$session = Token::extract(Cookie::get(Config::auth('session_cookie_name')));
+        // DB mobule not initialized, or Auth configuration file is missing.
+        if (!DB::init() || Config::auth() === null)
+            return;
 
-            // The authentication session data decrypted and decoded successfully.
-            if (self::$session !== null) {
+        if (Config::app() === null)
+            throw new \LogicException('The App configuration file is missing.');
 
-                // The authentication session did not expire yet (user is still active).
-                if (!Token::expired(self::$session['lastSeenAt'], Config::auth('session_ttl_days'), Token::TIME_DAYS)) {
+        if (!Cookie::isSet(self::COOKIE_NAME))
+            return;
 
-                    DB::prepare('SELECT EXISTS(SELECT 1 FROM ' . Config::db('table_auth') . ' WHERE Id = UUID_TO_BIN(:sessionId)) AS AuthSessionFound')
-                        ->bind(':sessionId', self::$session['sessionId']);
+        // Extract data from the session cookie.
+        $session = Token::extract(Cookie::get(self::COOKIE_NAME));
 
-                    // The authentication session record was found in the database.
-                    if (DB::single()['AuthSessionFound']) {
+        if ($session === null) {
 
-                        $device = Device::get();
+            // Invalid cookie.
+            Cookie::unset(self::COOKIE_NAME);
+            return;
+        }
 
-                        // The data of the current device matches the data of the device used for the authentication session initialization.
-                        if (
-                            self::$session['device']['type'] === mb_substr($device['type'], 0, 63) &&
-                            self::$session['device']['platform'] ===  mb_substr($device['platform'], 0, 63) &&
-                            self::$session['device']['browser'] === mb_substr($device['browser'], 0, 63)
-                        ) {
+        // Authenticate.
+        self::$session = $session;
 
-                            // Update the authentication session data.
-                            if (Token::expired(self::$session['lastSeenAt'], Config::auth('session_update_minutes'), Token::TIME_MINUTES)) {
+        if (Token::expired(
+                $session['signedInAt'],
+                Config::auth('session_lifetime_days') ?? self::SESSION_LIFETIME_DAYS,
+                Token::TIME_DAYS)
+        ) {
 
-                                self::updateSession();
+            // Session has reached its definitive expiration date.
+            self::revokeSession();
+            return;
+        }
 
-                            }
+        if (Token::expired(
+                $session['lastSeenAt'],
+                Config::auth('session_max_offline_days') ?? self::SESSION_MAX_OFFLINE_DAYS,
+                Token::TIME_DAYS)
+        ) {
 
-                            // User successfully authenticated.
-                            return;
-                        }
-                    }
-                }
+            // The user was offline for too long.
+            self::revokeSession();
+            return;
+        }
+
+        if (!Token::expired(
+                $session['sessionLastVerifyAt'],
+                Config::auth('token_trust_seconds') ?? self::TOKEN_TRUST_SECONDS,
+                Token::TIME_SECONDS)
+        ) {
+
+            // To avoid hitting the database and parsing the User-Agent on
+            // every request, trust the token for a certain amount of time
+            // before verifying the session again.
+            return;
+        }
+
+        // Check if the User-Agent signature has changed (e.g. cookie theft).
+        if ($session['device']) {
+
+            $device = self::getDevice();
+
+            if (!$device ||
+                $device['system'] !== $session['device']['system'] ||
+                $device['browser'] !== $session['device']['browser']
+            ) {
+
+                self::revokeSession();
+                return;
             }
-            
-            self::revokeSession(); // TODO: revoke all the expired sessions
+        }
+
+        // Session verification.
+        $result = DB::prepare(match (DB::$driver) {
+
+            DBDriver::MySQL =>
+                'SELECT 1 FROM `sessions` WHERE `Id` = UUID_TO_BIN(:id)',
+
+            DBDriver::PostgreSQL, DBDriver::SQLite =>
+                'SELECT 1 FROM "sessions" WHERE "Id" = :id',
+
+        })->bind(':id', $session['id'])->single();
+
+        if (!$result) {
+
+            // The session has been revoked.
+            Cookie::unset(self::COOKIE_NAME);
+            self::$session = null;
+            return;
+        }
+
+        // Update the "last verify" data.
+        self::$session['sessionLastVerifyAt'] = DB::dateTime();
+
+        // Update the "last seen" data.
+        if (!Token::expired(
+                self::$session['lastSeenAt'],
+                Config::auth('session_update_seconds') ?? self::SESSION_UPDATE_SECONDS,
+                Token::TIME_SECONDS)
+        ) {
+
+            self::setSessionCookie(self::$session);
+
+            // Not enough time passed since the "last seen" data update.
+            return;
+        }
+
+        $IPAddress = self::$session['lastSeenIPAddress'] = self::getIPAddress();
+        self::$session['lastSeenAt'] = self::$session['sessionLastVerifyAt'];
+
+        DB::prepare(match (DB::$driver) {
+
+            DBDriver::MySQL =>
+                'UPDATE `sessions` SET `LastSeenAt` = :lastSeenAt,
+                    `LastSeenIPAddress` = :lastSeenIPAddress
+                    WHERE `Id` = UUID_TO_BIN(:id)',
+
+            DBDriver::PostgreSQL, DBDriver::SQLite =>
+                'UPDATE "sessions" SET "LastSeenAt" = :lastSeenAt,
+                    "LastSeenIPAddress" = :lastSeenIPAddress
+                    WHERE "Id" = :id'
+
+        })->bindMultiple([
+            ':id' => $session['id'],
+            ':lastSeenAt' => self::$session['sessionLastVerifyAt'],
+            ':lastSeenIPAddress' => (DB::$driver === DBDriver::PostgreSQL)
+                ? $IPAddress
+                : ($IPAddress ? inet_pton($IPAddress) : null)
+        ])->execute();
+
+        if (!DB::rowCount()) {
+
+            // Unable to update in the database.
+            Cookie::unset(self::COOKIE_NAME);
+            self::$session = null;
+            return;
+        }
+
+        self::setSessionCookie(self::$session);
+    }
+
+    /**
+     * Initializes a new session for a given accountId (UUID). Returns true
+     * on success, or false on error or if too many active sessions.
+     * 
+     * @throws \LogicException
+     */
+    public static function initSession(string $accountId) : bool
+    {
+        // User Authenticated.
+        if (self::$session)
+            throw new \LogicException('User Authenticated.');
+
+        // Remove the orphaned expired sessions, if any (for example, when the
+        // authentication cookie of one of the previous sessions was manually
+        // deleted).
+        self::removeExpiredSessions($accountId);
+
+        // Check the number of active sessions.
+        $maxActiveSessions = Config::auth('max_active_sessions')
+            ?? self::MAX_ACTIVE_SESSIONS;
+
+        if ($maxActiveSessions) {
+
+            $activeSessionsCount = DB::prepare(match (DB::$driver) {
+
+                DBDriver::MySQL =>
+                    'SELECT COUNT(*) AS `Count` FROM `sessions`
+                        WHERE `AccountId` = UUID_TO_BIN(:accountId)',
+
+                DBDriver::PostgreSQL, DBDriver::SQLite =>
+                    'SELECT COUNT(*) AS "Count" FROM "sessions"
+                        WHERE "AccountId" = :accountId',
+
+            })->bind(':accountId', $accountId)->single()['Count'];
+
+            if ($activeSessionsCount > $maxActiveSessions)
+                return false;
+        }
+
+        $sessionId = UUID::generate();
+        $timeNow = DB::dateTime();
+        $device = self::getDevice();
+        $IPAddress = self::getIPAddress();
+        $IPaddressDB = (DB::$driver !== DBDriver::PostgreSQL)
+            ? ($IPAddress ? inet_pton($IPAddress) : null)
+            : $IPAddress;
+
+        // Save the session data to the database.
+        $result = DB::prepare(match (DB::$driver) {
+
+            DBDriver::MySQL =>
+                'INSERT INTO `sessions` VALUES (
+                    UUID_TO_BIN(:id), UUID_TO_BIN(:accountId), :signedInAt,
+                    :lastSeenAt, :signedInIPAddress, :lastSeenIPAddress, 
+                    :deviceSystem, :deviceBrowser)',
+
+            DBDriver::PostgreSQL, DBDriver::SQLite =>
+                'INSERT INTO "sessions" VALUES (
+                    :id, :accountId, :signedInAt, :lastSeenAt,
+                    :signedInIPAddress, :lastSeenIPAddress, :deviceSystem,
+                    :deviceBrowser)'
+
+        })->bindMultiple([
+            ':id'                => $sessionId,
+            ':accountId'         => $accountId,
+            ':signedInAt'        => $timeNow,
+            ':lastSeenAt'        => $timeNow,
+            ':signedInIPAddress' => $IPaddressDB,
+            ':lastSeenIPAddress' => $IPaddressDB,
+            ':deviceSystem'      => $device['system'] ?? null,
+            ':deviceBrowser'     => $device['browser'] ?? null
+        ])->execute();
+
+        if (!$result)
+            return false;
+
+        // Set session data.
+        $session = [
+            'id'                  => $sessionId,
+            'accountId'           => $accountId,
+            'signedInAt'          => $timeNow,
+            'lastSeenAt'          => $timeNow,
+            'signedInIPAddress'   => $IPAddress,
+            'lastSeenIPAddress'   => $IPAddress,
+            'device'              => $device,
+            'sessionLastVerifyAt' => $timeNow
+        ];
+
+        // Create the session cookie.
+        $result = self::setSessionCookie($session);
+
+        if (!$result)
+            return false;
+
+        self::$session = $session;
+        return true;
+    }
+
+    /**
+     * Revokes the authentication session by a given session UUID. If no
+     * parameter given, revokes the current session. Returns true on success, 
+     * or false if the session is not found in the database.
+     * 
+     * @throws \LogicException
+     */
+    public static function revokeSession(?string $id = null) : bool
+    {
+        // User unauthenticated.
+        if (!self::$session)
+            throw new \LogicException('User unauthenticated.');
+
+        $id ??= self::$session['id'];
+
+        // Remove the current session data.
+        if ($id === self::$session['id']) {
+
+            Cookie::unset(self::COOKIE_NAME);
             self::$session = null;
         }
+
+        // Remove the session from the database.
+        DB::prepare(match (DB::$driver) {
+
+            DBDriver::MySQL =>
+                'DELETE FROM `sessions` WHERE `Id` = UUID_TO_BIN(:id)',
+
+            DBDriver::PostgreSQL, DBDriver::SQLite =>
+                'DELETE FROM "sessions" WHERE "Id" = :id'
+
+        })->bind(':id', $id)->execute();
+
+        if (DB::rowCount())
+            return true;
+
+        // Session not found in the database.
+        return false;
     }
 
     /**
-     * Initializes the user authentication module. Returns null if the configuration file
-     * is missing or the database module cannot be initialized.
+     * Revokes all the sessions of the current user. Returns true on success,
+     * or false if no sessions were found in the database.
+     * 
+     * @throws \LogicException
      */
-    public static function init() : ?self
+    public static function revokeAllSessions() : bool
     {
-        if (DB::init() === null || Config::auth() === null) {
+        // User unauthenticated.
+        if (!self::$session)
+            throw new \LogicException('User unauthenticated.');
 
-            return null;
-        }
+        $accountId = self::$session['accountId'];
 
-        return self::$instance ?? self::$instance = new self;
+        // Remove the current session data.
+        Cookie::unset(self::COOKIE_NAME);
+        self::$session = null;
+
+        // Remove all the user's sessions from the database.
+        DB::prepare(match (DB::$driver) {
+
+             DBDriver::MySQL =>
+                'DELETE FROM `sessions`
+                    WHERE `AccountId` = UUID_TO_BIN(:accountId)',
+
+            DBDriver::PostgreSQL, DBDriver::SQLite =>
+                'DELETE FROM "sessions"
+                    WHERE "AccountId" = :accountId'
+
+        })->bind(':accountId', $accountId)->execute();
+
+        if (DB::rowCount())
+            return true;
+
+        // No sessions found in the database.
+        return false;
     }
 
     /**
-     * Returns the authentication session id of the Authenticated user account, or null if 
-     * the user is Unauthenticated.
+     * Revokes all the sessions of the current user, except the current
+     * session. Returns true on succes, or false if no other sessions were
+     * found in the database.
+     * 
+     * @throws \LogicException
+     */
+    public static function revokeOtherSessions() : bool
+    {
+        // User unauthenticated.
+        if (!self::$session)
+            throw new \LogicException('User unauthenticated.');
+
+        // Remove all the user's sessions from the database, except the
+        // current session.
+        DB::prepare(match (DB::$driver) {
+
+             DBDriver::MySQL =>
+                'DELETE FROM `sessions`
+                    WHERE `AccountId` = UUID_TO_BIN(:accountId)
+                        AND `Id` <> UUID_TO_BIN(:id)',
+
+            DBDriver::PostgreSQL, DBDriver::SQLite =>
+                'DELETE FROM "sessions"
+                    WHERE "AccountId" = :accountId
+                        AND "Id" <> :id'
+
+        })->bindMultiple([
+            ':accountId' => self::$session['accountId'],
+            ':id' => self::$session['id'],
+        ])
+        ->execute();
+
+        if (DB::rowCount())
+            return true;
+
+        // No other sessions found in the database.
+        return false;
+    }
+
+    /**
+     * Removes all the expired sessions of a given account UUID from the
+     * database. Returns true on success, or false if no expired sessions were
+     * found in the database.
+     */
+    public static function removeExpiredSessions(string $accountId) : bool
+    {
+        $cutoffDateTime = DB::dateTime(
+            time() - 86400 * (Config::auth('session_lifetime_days')
+                ?? self::SESSION_LIFETIME_DAYS)
+        );
+
+        // Remove all the expired sessions from the database.
+        DB::prepare(match (DB::$driver) {
+
+             DBDriver::MySQL =>
+                'DELETE FROM `sessions`
+                    WHERE `AccountId` = UUID_TO_BIN(:accountId)
+                        AND `SignedInAt` < :cutoffDateTime',
+
+            DBDriver::PostgreSQL, DBDriver::SQLite =>
+                'DELETE FROM "sessions"
+                    WHERE "AccountId" = :accountId
+                        AND "SignedInAt" < :cutoffDateTime',
+
+        })->bindMultiple([
+            ':accountId' => $accountId,
+            ':cutoffDateTime' => $cutoffDateTime
+        ])
+        ->execute();
+
+        if (DB::rowCount())
+            return true;
+
+        // No expired sessions found in the database.
+        return false;
+    }
+
+    /**
+     * Returns the current session UUID, or null if the user is
+     * unauthenticated.
      */
     public static function getSessionId() : ?string
     {
-        return self::$session['sessionId'] ?? null;
+        return self::$session['id'] ?? null;
     }
 
     /**
-     * Returns the id of the Authenticated user account, or null if the user is 
-     * Unauthenticated.
+     * Returns the accountId (UUID) associated with the current session,
+     * or null if the user is unauthenticated.
      */
     public static function getAccountId() : ?string
     {
@@ -92,23 +441,7 @@ Final Class Auth
     }
 
     /**
-     * Returns the device info array, or null if the user is Unauthenticated.
-     * 
-     *  Returning array keys:
-     *      [
-     *          'type',
-     *          'platform',
-     *          'browser'
-     *      ]
-     * 
-     */
-    public static function getDevice() : ?array
-    {
-        return  self::$session['device'] ?? null;
-    }
-
-    /**
-     * Returns the dateTime of the initialization of the session.
+     * Returns the dateTime the session was initialized.
      */
     public static function getSignedInAt() : ?string
     {
@@ -116,7 +449,7 @@ Final Class Auth
     }
 
     /**
-     * Returns the dateTime of the last session data update.
+     * Returns the dateTime the session data updated.
      */
     public static function getLastSeenAt() : ?string
     {
@@ -124,7 +457,7 @@ Final Class Auth
     }
 
     /**
-     * Returns the IP address that was when the session was initialized.
+     * Returns the IP address of the session initialization.
      */
     public static function getSignedInIPAddress() : ?string
     {
@@ -132,7 +465,7 @@ Final Class Auth
     }
 
     /**
-     * Returns the IP address that was the last time the session data was updated.
+     * Returns the IP address of the session update.
      */
     public static function getLastSeenIPAddress() : ?string
     {
@@ -140,201 +473,83 @@ Final Class Auth
     }
 
     /**
-     * Initializes an authentication session for a given Account Id.
-     * Authentication session is stateful as its data is stored in the database.
-     * Returns true on success, false on error.
+     * Sets or updates the session cookie.
+     * 
+     * @throws \LogicException
      */
-    public static function initSession(string $accountId) : bool
+    protected static function setSessionCookie(array $session) : bool
     {
-        $device = Device::get();
-        $timeNow = DB::dateTime();
-        $IPAddress = '';
+        return Cookie::setForDays(
+            self::COOKIE_NAME,
+            Token::create($session),
+            Config::auth('session_lifetime_days') ?? self::SESSION_LIFETIME_DAYS
+        );
+    }
 
-        // Get IP address of the client.
-        $addressHeaders = ['HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR',
-			'HTTP_X_FORWARDED', 'HTTP_X_CLUSTER_CLIENT_IP',
-			'HTTP_FORWARDED_FOR', 'HTTP_FORWARDED', 'REMOTE_ADDR'];
-
-		foreach ($addressHeaders as $header) {
-			if (array_key_exists($header, $_SERVER)) {
-				$addressChain = explode(',', $_SERVER[$header]);
-				$IPAddress = trim($addressChain[0]);
-				break;
-			}
-		}
-
-        // Save the authentication session data to the database.
-        $sessionId = DB::prepare('SELECT UUID() AS UUID')->single()['UUID'];
-        $result = DB::prepare('INSERT INTO ' . Config::db('table_auth') . ' (Id, AccountId, DeviceType, DevicePlatform, 
-                                DeviceBrowser, SignedInAt, LastSeenAt, SignedInIPAddress, LastSeenIPAddress) 
-                                VALUES( UUID_TO_BIN(:id), :accountId, :deviceType, :devicePlatform, :deviceBrowser, 
-                                :signedInAt, :lastSeenAt, INET6_ATON(:signedInIPAddress), INET6_ATON(:lastSeenIPAddress))')
-        ->bindMultiple([
-            ':id'                   => $sessionId,
-            ':accountId'            => $accountId,
-            ':deviceType'           => $device['type'],
-            ':devicePlatform'       => $device['platform'],
-            ':deviceBrowser'        => $device['browser'],
-            ':signedInAt'           => $timeNow,
-            ':lastSeenAt'           => $timeNow,
-            ':signedInIPAddress'    => $IPAddress,
-            ':lastSeenIPAddress'    => $IPAddress
-        ])
-        ->execute();
-
-        if (!$result) {
-
-            return false;
-        }
-
-        // Save the autnhentication session data to the authentication session cookie.
-        self::$session = [
-            'sessionId'         => $sessionId,
-            'accountId'         => $accountId,
-            'device'            => $device,
-            'signedInAt'        => $timeNow,
-            'lastSeenAt'        => $timeNow,
-            'signedInIPAddress' => $IPAddress,
-            'lastSeenIPAddress' => $IPAddress
+    /**
+     * Returns the user's IP address, or null if unable to determine.
+     */
+    protected static function getIPAddress() : ?string
+    {
+        $headers = [
+            'HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_FORWARDED',
+            'HTTP_X_CLUSTER_CLIENT_IP', 'HTTP_FORWARDED_FOR', 'HTTP_FORWARDED',
+            'REMOTE_ADDR'
         ];
 
-        $sessionToken = Token::create(self::$session);
+		foreach ($headers as $header) {
+            if (array_key_exists($header, $_SERVER))
+                return trim(strtok($_SERVER[$header], ','));
+		}
 
-        if (Cookie::setForDays(Config::auth('session_cookie_name'), $sessionToken, Config::auth('session_ttl_days'))) {
-
-            return true;
-        }
-
-        self::$session = null;
-        return false;
+        return null;
     }
 
     /**
-     * Updates "last seen" fields of the saved authentication session data. Also 
-     * updates the values stored in the database. Returns true on success, false on 
-     * error.
+     * Parses User-Agent signature, such as system and browser infos. Returns
+     * an associative array, or null, if the User-Agent header is not set, or
+     * the optional $userAgent parameter is empty. This method is used for
+     * precautionary purposes, such as to detect theft of the session cookie.
+     * 
+     * Resulting array example:
+     *  [
+     *      'system' => 'Linux; Android 13; SM-S901B',
+     *      'browser' => 'Chrome Mobile Safari' // may be empty
+     *  ]
      */
-    public static function updateSession() : bool
+    protected static function getDevice(?string $userAgent = null) : ?array
     {
-        $timeNow = DB::dateTime();
-        $IPAddress = $_SERVER['REMOTE_ADDR'] ?? '';
+        $UA = $userAgent ?? $_SERVER['HTTP_USER_AGENT'];
 
-        // Update the authentication session "last seen" data in the database.
-        DB::prepare('UPDATE ' . Config::db('table_auth') . ' SET LastSeenAt = :lastSeenAt, LastSeenIPAddress = INET6_ATON(:lastSeenIPAddress) 
-                            WHERE Id = UUID_TO_BIN(:sessionId)')
-            ->bind(':lastSeenAt', $timeNow)
-            ->bind(':lastSeenIPAddress', $IPAddress)
-            ->bind(':sessionId', self::getSessionId())
-            ->execute();
+        // User-Agent header not set, or empty
+        if (!$UA)
+            return null;
 
-        if (!DB::rowCount()) {
+        // Split in 2 parts: system information and extensions
+        $parts = explode(')', $UA, 2);
 
-            return false;
-        }
+        // Parse system information from part 1. If it is not in parantheses,
+        // then the User-Agent string itself represents the system information
+        // (part 2 will be empty in this case).
+        $system = explode('(', $parts[0], 2)[1] ?? $parts[0];
 
-        // Update the authentication session "last seen" data in the authentication session 
-        // cookie.
-        $sessionUpdated = self::$session;
-        $sessionUpdated['lastSeenAt'] = $timeNow;
-        $sessionUpdated['lastSeenIPAddress'] = $IPAddress;
+        // Strip system builds (Build/a.b.c) or minor versions (.b.c-beta).
+        $system = preg_replace('/(\s?Build)?((\/[\w\-]+)|[\.\_])[\w\.\-]*/i', '', $system);
 
-        $sessionToken = Token::create($sessionUpdated);
+        // Parse browser information from part 2.
+        $part2 = $parts[1] ?? '';
+        $list = explode(' ', ltrim(explode(')', $part2, 2)[1] ?? $part2));
 
-        if (Cookie::setForDays(Config::auth('session_cookie_name'), $sessionToken, Config::auth('session_ttl_days'))) {
+        // Strip browsers versions.
+        $browser = '';
+        foreach ($list as $browserVer) $browser .= ' ' . strtok($browserVer, '/');
 
-            self::$session = $sessionUpdated;
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Revokes the authentication session by given authentication session id. If no 
-     * parameter given, Revokes the current authentication session. Returns true on 
-     * success, false on error.
-     */
-    public static function revokeSession(?string $sessionId = null) : bool
-    {
-        // Remove invalid authentication session cookie.
-        if (!self::$session) {
-
-            return Cookie::unset(Config::auth('session_cookie_name'));
-        }
-
-        // Remove the authentication session from the database by given authentication 
-        // session id or by the current authentication session id.
-        DB::prepare('DELETE FROM ' . Config::db('table_auth') . ' WHERE Id = UUID_TO_BIN(:sessionId) AND AccountId = :accountId')
-            ->bind(':sessionId', $sessionId ?? self::$session['sessionId'])
-            ->bind(':accountId', self::$session['accountId'])
-            ->execute();
-
-        if (!DB::rowCount()) {
-
-            return false;
-        }
-
-        // Revoke the current authentication session and remove its authentication session 
-        // cookie.
-        if (!$sessionId || self::$session['sessionId'] == $sessionId) {
-
-            self::$session = null;
-            Cookie::unset(Config::auth('session_cookie_name'));
-
-        }
-
-        return true;
-    }
-
-    /**
-     * Revokes all the authentication sessions. Returns true on success, false on 
-     * error. 
-     */
-    public static function revokeAllSessions() : bool
-    {
-        // Remove invalid authentication session cookie.
-        if (!self::$session) {
-
-            return Cookie::unset(Config::auth('session_cookie_name'));
-        }
-
-        // Remove all the authentication sessions from the database.
-        DB::prepare('DELETE FROM ' . Config::db('table_auth') . ' WHERE AccountId = :accountId')
-            ->bind(':accountId', self::$session['accountId'])
-            ->execute();
-        
-        if (!DB::rowCount()) {
-
-            return false;
-        }
-
-        // Revoke the current authentication session and remove its authentication session
-        // cookie.
-        self::$session = null;
-        Cookie::unset(Config::auth('session_cookie_name'));
-
-        return true;
-    }
-
-    /**
-     * Revokes all the authentication sessions except the current one. Returns true on 
-     * succes, false on error.
-     */
-    public static function revokeOtherSessions() : bool
-    {
-        // Remove invalid authentication session cookie.
-        if (!self::$session) {
-
-            return Cookie::unset(Config::auth('session_cookie_name'));
-        }
-
-        // Remove all the authentication sessions from the database, except the current one.
-        DB::prepare('DELETE FROM ' . Config::db('table_auth') . ' WHERE AccountId = :accountId AND Id <> UUID_TO_BIN(:sessionId)')
-            ->bind(':sessionId', self::$session['sessionId'])
-            ->bind(':accountId', self::$session['accountId'])
-            ->execute();
-
-        return (bool) DB::rowCount();
+        return [
+            // substr for a more efficient storage of utf8mb4 varchar(63)
+            'system' => substr($system, 0, 63),
+            // remove the extra space character at the beginning
+            'browser' => substr($browser, 1, 63)
+        ];
     }
 
 }

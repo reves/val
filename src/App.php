@@ -42,7 +42,7 @@ Abstract Class App
         self::$DIR_RESOURCES  = self::$DIR_ROOT . '/resources';
         self::$DIR_VIEW       = self::$DIR_ROOT . '/view';
 
-        // Timezone
+        // Default timezone
         date_default_timezone_set('UTC');
 
         // Common headers

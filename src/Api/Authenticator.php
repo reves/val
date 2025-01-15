@@ -64,7 +64,7 @@ Abstract Class Authenticator
         $issuer = Config::app('authenticator_issuer');
         $urlEncoded = rawurlencode("otpauth://totp/{$label}?secret={$secretKey}&issuer={$issuer}");
 
-        return "https://api.qrserver.com/v1/create-qr-code/?data=$urlEncoded&size=${size}x${size}&ecc=M";
+        return "https://api.qrserver.com/v1/create-qr-code/?data=$urlEncoded&size={$size}x{$size}&ecc=M";
     }
 
     /**

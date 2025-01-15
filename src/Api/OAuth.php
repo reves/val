@@ -38,21 +38,5 @@ Abstract Class OAuth
             'redirect_uri' => Config::oauth('facebook_redirect_uri')
         ]);
     }
-
-    /**
-     * VK.
-     * Returns null in case of an error.
-     * 
-     * https://vk.com/dev/authcode_flow_user
-     */
-    public static function VK(string $code) : ?array
-    {
-        return HTTP::post('https://oauth.vk.com/access_token', [
-            'code' => $code,
-            'client_id' => Config::oauth('vk_client_id'),
-            'client_secret' => Config::oauth('vk_client_secret'),
-            'redirect_uri' => Config::oauth('vk_redirect_uri')
-        ]);
-    }
     
 }

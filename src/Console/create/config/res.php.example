@@ -1,7 +1,0 @@
-<?php
-
-return [
-
-    'resource' => 'folder/file.extension',
-
-];

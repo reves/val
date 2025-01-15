@@ -2,93 +2,148 @@
 
 namespace Val\App;
 
-use Val\App;
 use PDO;
+use Val\App;
+
+enum DBDriver : string
+{
+    case MySQL      = 'mysql'; // compatible with MariaDB 
+    case PostgreSQL = 'pgsql';
+    case SQLite     = 'sqlite';
+}
 
 Final Class DB
 {
     protected static ?self $instance = null;
 
-    // Data Source Name
-    protected static string $dsn = '';
+    // Database driver.
+    public static ?DBDriver $driver = null;
+
+    // Data Source Name.
+    protected static string $DSN = '';
 
     // Database handler.
     protected static ?PDO $handler = null;
 
-    // Prepared statement
+    // Prepared statement.
     protected static ?\PDOStatement $statement = null;
 
-    // Transaction status
+    // Transaction status.
     protected static bool $transactionActive = false;
 
-    // Counter for the question mark placeholders
+    // Counter for the question mark placeholders.
     protected static int $questionMarkPlaceholderIndex = 0;
 
+    protected function __construct() {} // for convenience of using object operator
+
     /**
-     * Initializes connection parameters.
+     * Initializes the database module. Returns true in case of success, or 
+     * false, if the database config is missing.
+     * 
+     * @throws \LogicException
      */
-    protected function __construct()
+    public static function init() : bool
     {
-        $driver = Config::db('driver') ?? 'mysql';
-        self::$dsn = "{$driver}:";
+        // Already initialized.
+        if (self::$instance) 
+            return true;
 
-        if ($driver === 'sqlite') {
-            $path = Config::db('path');
-            $memory = Config::db('memory');
-            self::$dsn .= $path ?? ($memory ? ':memory:' : '' );
+        // Configuration file is missing.
+        if (Config::db() === null)
+            return false;
 
-            return;
+        self::$instance = new self;
+
+        // Create a DSN (connection parameters string).
+        $driver = Config::db('driver') ?? DBDriver::MySQL;
+
+        if (!$driver instanceof DBDriver) {
+
+            $driver = DBDriver::tryFrom($driver)
+                ?? throw new \LogicException('The specified database "driver" is not supported.');
         }
 
-        ($host = Config::db('host')) && self::$dsn .= "host={$host};";
-        ($port = Config::db('port')) && self::$dsn .= "port={$port};";
-        ($db = Config::db('db'))     && self::$dsn .= "dbname={$db};";
-        ($user = Config::db('user')) && self::$dsn .= "user={$user};";
-        ($pass = Config::db('pass')) && self::$dsn .= "password={$pass};";
+        self::$driver = $driver;
+        self::$DSN = $driver->value . ':';
 
-        self::$dsn .= ($driver === 'pgsql') ? 'options=\'--client_encoding=UTF8\'' : 'charset=utf8mb4';
-    }
+        // SQLite (on-disk only)
+        if ($driver === DBDriver::SQLite) {
 
-    /**
-     * Initializes the database module. Returns null if the configuration file is missing.
-     */
-    public static function init() : ?self
-    {
-        return (Config::db() === null) ? null : self::$instance ?? self::$instance = new self;
+            $path = Config::db('path');
+
+            if ($path === null)
+                throw new \LogicException('The field "path" is not set in the database config.');
+
+            self::$DSN .= $path;
+
+            return true;
+        }
+
+        // MySQL and PostgreSQL
+        ($host = Config::db('host')) && self::$DSN .= "host={$host};";
+        ($port = Config::db('port')) && self::$DSN .= "port={$port};";
+        ($db = Config::db('db'))     && self::$DSN .= "dbname={$db};";
+        self::$DSN .= ($driver === DBDriver::PostgreSQL)
+            ? "options='--client_encoding=UTF8'"
+            : 'charset=utf8mb4';
+
+        return true;
     }
 
     /** 
      * Connects to the database.
      * 
-     * @throws \RuntimeException
+     * @throws \LogicException
      */
-    protected static function connect() : self
+    protected static function connect() : PDO
     {
-        if (self::$handler) return self::$instance;
+        // Already connected.
+        if (self::$handler) 
+            return self::$handler;
 
         if (Config::db() === null)
-            throw new \RuntimeException('Database configuration file is missing.');
+            throw new \LogicException('Database configuration file is missing.');
+
+        // Connection parameters.
+        $user = Config::db('user');
+        $pass = Config::db('pass');
 
         $options = [
             PDO::ATTR_CASE => PDO::CASE_NATURAL,
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_ORACLE_NULLS => PDO::NULL_NATURAL,
             PDO::ATTR_STRINGIFY_FETCHES => false,
             PDO::ATTR_EMULATE_PREPARES => false,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
         ];
 
+        if (self::$driver === DBDriver::SQLite) {
+
+            $options[PDO::SQLITE_ATTR_OPEN_FLAGS] = PDO::SQLITE_OPEN_CREATE | PDO::SQLITE_OPEN_READWRITE;
+
+        } else {
+
+            if ($user === null)
+                throw new \LogicException('The field "user" is not set in the database config.');
+
+            if ($pass === null)
+                throw new \LogicException('The field "pass" is not set in the database config.');
+
+        }
+
+        // Connect.
         try {
 
-            self::$handler = new PDO(self::$dsn, options: $options);
+            return self::$handler = new PDO(self::$DSN, $user, $pass, $options);
 
         } catch (\PDOException $e) {
 
+            // Suppress the exception details to prevent exposing sensitive
+            // information.
             error_log("Database connection error: {$e->getMessage()}");
-            App::exit();
-        }
 
-        return self::$instance;
+            throw new \LogicException('Database connection error, check the logs for details.');
+
+        }
     }
 
     /**
@@ -96,7 +151,9 @@ Final Class DB
      */
     public static function beginTransaction() : bool
     {
-        return (self::$transactionActive) ? true : self::$transactionActive = self::connect()::$handler->beginTransaction();
+        return (self::$transactionActive)
+            ? true
+            : self::$transactionActive = self::connect()->beginTransaction();
     }
 
     /**
@@ -104,7 +161,9 @@ Final Class DB
      */
     public static function commit() : bool
     {
-        return (!self::$transactionActive) ? true : !(self::$transactionActive = !self::$handler->commit());
+        return (!self::$transactionActive)
+            ? true
+            : !(self::$transactionActive = !self::$handler->commit());
     }
 
     /**
@@ -112,7 +171,9 @@ Final Class DB
      */
     public static function rollback() : bool
     {
-        return (!self::$transactionActive) ? true : self::$transactionActive = !self::$handler->rollBack();
+        return (!self::$transactionActive)
+            ? true
+            : self::$transactionActive = !self::$handler->rollBack();
     }
 
     /**
@@ -124,19 +185,26 @@ Final Class DB
     }
 
     /**
-     * Executes an SQL statement with a custom query. Data inside the query should be 
-     * properly escaped. This method cannot be used with any queries that return results.
+     * Executes an SQL statement with a custom query. Data inside the query
+     * should be properly escaped. This method cannot be used with any queries
+     * that return results. Returns the number of rows that were modified or
+     * deleted, or false on error.
      */
-    public static function raw(string $query) : self
+    public static function raw(string $query) : int|bool
     {
-        self::connect()::$handler->exec($query);
+        try {
 
-        return self::$instance;
+            return self::connect()->exec($query);
+
+        } catch (\PDOException) {
+
+            return false;
+        }
     }
 
     /**
-     * The id of the last inserted row. Warning(!) In case of a transaction, should be 
-     * used before commit.
+     * The id of the last inserted row. Warning(!) In case of a transaction,
+     * should be used before commit.
      */
     public static function lastInsertId() : string
     {
@@ -148,15 +216,15 @@ Final Class DB
      */
     public static function prepare(string $query) : self
     {
-        self::$statement = self::connect()::$handler->prepare($query);
+        self::$statement = self::connect()->prepare($query);
         self::$questionMarkPlaceholderIndex = 0;
 
         return self::$instance;
     }
 
     /**
-     * Executes the prepared statement. All the $parameters values are treated as 
-     * PDO::PARAM_STR. Returns true on success.
+     * Executes the prepared statement. All the $parameters values are treated
+     * as PDO::PARAM_STR. Returns true on success.
      */
     public static function execute(?array $parameters = null) : bool
     {
@@ -164,9 +232,9 @@ Final Class DB
     }
 
     /**
-     * Binds the $value to the $placeholder. The $placeholder can be either a string 
-     * denoting a named placehold or an int denoting a question mark placeholder index 
-     * in the query.
+     * Binds the $value to the $placeholder. The $placeholder can be either a
+     * string denoting a named placehold or an int denoting a question mark
+     * placeholder index in the query.
      */
     public static function bind(string|int $placeholder, bool|float|int|string|null $value) : self
     {
@@ -186,9 +254,9 @@ Final Class DB
     }
 
     /**
-     * Binds multiple placeholders using sef::bind method for each placeholder. The 
-     * $relations should represent an array of $placeholder => $value relations. 
-     * Read self::bind method documentation for details.
+     * Binds multiple placeholders using sef::bind method for each placeholder.
+     * The $relations parameter should represent an array of $placeholder => 
+     * $value relations. Read self::bind method documentation for details.
      */
     public static function bindMultiple(array $relations) : self
     {
@@ -199,8 +267,8 @@ Final Class DB
     }
 
     /**
-     * Binds the $value to a question mark placeholder whose index automatically 
-     * increments.
+     * Binds the $value to a question mark placeholder whose index
+     * automatically increments.
      */
     public static function bindPlaceholder(bool|float|int|string|null $value) : self
     {
@@ -209,13 +277,12 @@ Final Class DB
 
     /**
      * Binds the $values to multiple question mark placeholders whose index 
-     * automatically increments using sef::bindPlaceholder method for each of them. 
-     * Read self::bindPlaceholder method documentation for details.
+     * automatically increments using sef::bindPlaceholder method for each of
+     * them. Read self::bindPlaceholder method documentation for details.
      */
     public static function bindMultiplePlaceholders(array $values) : self
     {
-        foreach ($values as $value)
-            self::bindPlaceholder($value);
+        foreach ($values as $value) self::bindPlaceholder($value);
 
         return self::$instance;
     }
@@ -239,8 +306,8 @@ Final Class DB
     }
 
     /**
-     * Returns the array containing first row of the result set rows. Returns null in case 
-     * of an empty result or an error.
+     * Returns the array containing first row of the result set rows. Returns
+     * null in case of an empty result or an error.
      * 
      * Result example: (using PDO::FETCH_ASSOC)
      * 
@@ -257,9 +324,9 @@ Final Class DB
     }
 
     /**
-     * Returns the number of rows affected by the last SQL statement. Warning(!) when 
-     * PDO::MYSQL_ATTR_FOUND_ROWS is set to true, it returns the number of found (matched) 
-     * rows, not the number of changed rows.
+     * Returns the number of rows affected by the last SQL statement.
+     * Warning(!) when PDO::MYSQL_ATTR_FOUND_ROWS is set to true, it returns
+     * the number of found (matched) rows, not the number of changed rows.
      */
     public static function rowCount() : int
     {
@@ -267,11 +334,12 @@ Final Class DB
     }
 
     /**
-     * Returns the current dateTime matching the MySQL "YYYY-MM-DD hh:mm:ss" format.
+     * Returns a dateTime string matching the ISO 8601 "YYYY-MM-DD hh:mm:ss"
+     * format. If no timestamp given, returns the current dateTime.
      */
-    public static function dateTime() : string
+    public static function dateTime(?int $timestamp = null) : string
     {
-        return date('Y-m-d H:i:s');
+        return date('Y-m-d H:i:s', $timestamp);
     }
 
     /**

@@ -1,16 +1,27 @@
 <?php
 
+use Val\App\DBDriver;
+
 return [
+    
+    /**
+     * Supported drivers: MySQL (MariaDB), PostgreSQL and SQLite.
+     * 
+     * Default: Val\App\DBDriver::MySQL
+     */
+    'driver' => DBDriver::MySQL,
 
     /**
-     * Database connection.
+     * MySQL (MariaDB) or PostgreSQL
      */
-    'host' => 'localhost',
-    'db' => 'database',
-    'user' => 'user',
-    'pass' => 'password',
+    'host' => '127.0.0.1',
+    'db'   => 'database',
+    'user' => 'root',
+    'pass' => '',
 
-    'table_migrations' => 'migrations',
-    'table_auth' => 'auth'
+    /**
+     * SQLite
+     */
+    // 'path' => Val\App::$DIR_ROOT . '/db.sqlite3',
 
 ];

@@ -29,7 +29,7 @@ Abstract Class Lang
         if (App::isApi() || !Config::app('languages'))
             return;
 
-        $code = strtok($_SERVER["REQUEST_URI"], '/');
+        $code = strtok($_SERVER["REQUEST_URI"] ?? '', '/');
         $parsed = self::parse($code);
 
         // Language code is not present in the URL path or is invalid or is not

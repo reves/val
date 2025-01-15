@@ -1,6 +1,6 @@
 <?php
 
-use Val\Interfaces\MigrationInterface;
+use Val\Console\Interfaces\MigrationInterface;
 use Val\App\DB;
 
 Class {name} Implements MigrationInterface

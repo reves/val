@@ -3,15 +3,13 @@
 namespace Val\Console;
 
 use Val\{App, Console};
-use Val\App\{Config, DB};
+use Val\App\{Config, DB, DBDriver};
 
 Abstract Class Migrate
 {	
     // TODO: Rollback last migration(s) [+bulk]; to a specific version number? (steps currently)
     // TODO: migrate:status
     // TODO: ask for confirmation before executing
-
-    protected static ?string $dbTable;
 
     /**
      * Initializes the database migrations table.
@@ -23,18 +21,40 @@ Abstract Class Migrate
             App::exit();
         }
 
-        if (!self::$dbTable = Config::db('table_migrations')) {
-            Console::println('Migration aborted! Database config field "table_migrations" not specified.', '31');
-            App::exit();
-        }
+        $result = DB::raw(match (DB::$driver) {
 
-        DB::raw('CREATE TABLE IF NOT EXISTS `' . self::$dbTable . '` (
-                  `Version` int unsigned NOT NULL,
-                  `Name` varchar(255) NOT NULL,
-                  `CreatedAt` datetime NOT NULL,
-                  PRIMARY KEY (`Version`)
-                ) ENGINE=InnoDB;
-        ');
+            DBDriver::MySQL =>
+                'CREATE TABLE IF NOT EXISTS `migrations` (
+                    `Version` int unsigned NOT NULL,
+                    `Name` varchar(255) NOT NULL,
+                    `CreatedAt` datetime NOT NULL,
+                    PRIMARY KEY (`Version`)
+                );',
+
+            DBDriver::PostgreSQL =>
+                'CREATE TABLE IF NOT EXISTS "migrations" (
+                    "Version" integer NOT NULL PRIMARY KEY,
+                    "Name" varchar(255) NOT NULL,
+                    "CreatedAt" timestamp NOT NULL
+                );',
+
+            DBDriver::SQLite => 
+                'CREATE TABLE IF NOT EXISTS "migrations" (
+                    "Version" integer NOT NULL PRIMARY KEY,
+                    "Name" text NOT NULL,
+                    "CreatedAt" text NOT NULL
+                );'
+
+        });
+
+        Console::println(
+            $result !== false
+                ? 'The "migrations" table successfully created.' // TODO: check that the table exists in the first place. This message is confusing if the table already exists.
+                : 'The "migrations" table could not be created.',
+            $result !== false
+                ? '32'
+                : '31'
+        );
     }
 
     /**
@@ -57,8 +77,15 @@ Abstract Class Migrate
 
         self::init();
 
-        $currentVersion = DB::prepare('SELECT * FROM ' . self::$dbTable . ' ORDER BY Version DESC')
-            ->single()['Version'] ?? 0;
+        $currentVersion = DB::prepare(match (DB::$driver) {
+
+            DBDriver::MySQL =>
+                'SELECT * FROM `migrations` ORDER BY `Version` DESC',
+
+            DBDriver::PostgreSQL, DBDriver::SQLite =>
+                'SELECT * FROM "migrations" ORDER BY "Version" DESC'
+
+        })->single()['Version'] ?? 0;
 
         if ($applyVersion && $currentVersion >= $applyVersion) {
             Console::println('The specified version or later has already been applied.');
@@ -114,11 +141,22 @@ Abstract Class Migrate
             $migrationClass = "\\{$migration['name']}";
             (new $migrationClass)->up();
 
-            $result = DB::prepare('INSERT INTO ' . self::$dbTable . ' VALUES(:version, :name, :createdAt)')
-                ->bind(':version', $version)
-                ->bind(':name', $migration['name'])
-                ->bind(':createdAt', DB::dateTime())
-                ->execute();
+            $result = DB::prepare(match (DB::$driver) {
+
+                DBDriver::MySQL =>
+                    'INSERT INTO `migrations`
+                        VALUES (:ver, :name_, :createdAt)',
+
+                DBDriver::PostgreSQL, DBDriver::SQLite =>
+                    'INSERT INTO "migrations"
+                        VALUES (:ver, :name_, :createdAt)'
+
+            })->bindMultiple([
+                ':ver' => $version,
+                ':name_' => $migration['name'],
+                ':createdAt' => DB::dateTime()
+            ])
+            ->execute();
 
             if (!$result) {
                 Console::println("Migration stopped! Failed to register version {$version} ({$migration['name']}) in the migrations table.", '31');
@@ -150,7 +188,7 @@ Abstract Class Migrate
         self::init();
         
         $steps = $steps ?? 1;
-        $appliedVersions = DB::prepare('SELECT Version FROM ' . self::$dbTable . ' ORDER BY Version DESC LIMIT :steps')
+        $appliedVersions = DB::prepare('SELECT Version FROM migrations ORDER BY Version DESC LIMIT :steps')
             ->bind(':steps', $steps)
             ->resultset();
         $c = count($appliedVersions);
@@ -224,7 +262,7 @@ Abstract Class Migrate
             $migrationClass = "\\{$migrations[$version]['name']}";
             (new $migrationClass)->down();
 
-            $result = DB::prepare('DELETE FROM ' . self::$dbTable . ' WHERE Version = :version')
+            $result = DB::prepare('DELETE FROM migrations WHERE Version = :version')
                 ->bind(':version', $version)
                 ->execute();
 
@@ -245,7 +283,7 @@ Abstract Class Migrate
     public static function _getFiles(bool $desc = false) : array
     {
         return array_filter(
-            scandir(App::$DIR_MIGRATIONS, $desc ? SCANDIR_SORT_DESCENDING : null),
+            scandir(App::$DIR_MIGRATIONS, $desc ? SCANDIR_SORT_DESCENDING : 0),
             fn($v) => preg_match('/^\d+_[a-zA-Z]+\.php$/', $v)
         );
     }

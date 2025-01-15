@@ -114,7 +114,6 @@ Abstract Class Create
             'app'	=> 'app.php.example',
             'auth'	=> 'auth.php.example',
             'db'	=> 'db.php.example',
-            'res'	=> 'res.php.example',
             default	=> 'config.php.example'
         };
 
@@ -128,7 +127,7 @@ Abstract Class Create
         if ($name == 'auth') {
             
             Console::println();
-            self::migration('CreateAuthSessionsTable');
+            self::migration('CreateSessionsTable');
         }
 
         return true;
@@ -186,12 +185,12 @@ Abstract Class Create
         }
 
         $files = Migrate::_getFiles(true);
-        echo $files[0];
+        if($files) echo $files[0];
         $newVersion = $files ? intval(strtok($files[0], '_')) + 1 : 1;
         $filePath = APP::$DIR_MIGRATIONS . "/{$newVersion}_{$className}.php";
 
         $template = match ($className) { // TODO: scandir for matching examples
-            'CreateAuthSessionsTable'	=> 'CreateAuthSessionsTable.php.example',
+            'CreateSessionsTable'	=> 'CreateSessionsTable.php.example',
             default						=> 'Migration.php.example'
         };
 
