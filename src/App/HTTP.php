@@ -5,8 +5,8 @@ namespace Val\App;
 Abstract Class HTTP
 {
     /**
-     * Sends a GET request. Returns an array of JSON decoded data or null, in case of an 
-     * error or empty response.
+     * Sends a GET request. Returns an array of JSON decoded data or null, in
+     * case of an error or empty response.
      */
     public static function get(string $url, array $parameters = []) : ?array
     {
@@ -16,8 +16,8 @@ Abstract Class HTTP
     }
 
     /**
-     * Sends a POST request. Returns an array of JSON decoded data or null, in case of an 
-     * error or empty response.
+     * Sends a POST request. Returns an array of JSON decoded data or null, in 
+     * case of an error or empty response.
      */
     public static function post(string $url, array $parameters = []) : ?array
     {

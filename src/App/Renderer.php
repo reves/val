@@ -46,7 +46,8 @@ Final Class Renderer
     }
 
     /**
-     * Loads a template. Throws an Exception if the specified template file is missing.
+     * Loads a template. Throws an Exception if the specified template file is 
+     * missing.
      * 
      * @throws \RuntimeException
      */
@@ -58,12 +59,14 @@ Final Class Renderer
         $directoryPath = self::$directoryPath;
 
         if (!is_file($path))
-            throw new \RuntimeException("Template file \"{$file}\" is missing in \"{$directoryPath}\" directory.");
+            throw new \RuntimeException("Template file \"{$file}\" is missing 
+                in \"{$directoryPath}\" directory.");
 
         $contents = file_get_contents($path);
 
         if ($contents === false)
-            throw new \RuntimeException("Failed to read template file \"{$file}\" in \"{$directoryPath}\" directory.");
+            throw new \RuntimeException("Failed to read template file 
+                \"{$file}\" in \"{$directoryPath}\" directory.");
 
         self::$content = self::minify($contents);
 
@@ -81,8 +84,8 @@ Final Class Renderer
 
     /**
      * Registers multiple bindings using sef::bind method for each of them. The 
-     * $relations should represent an array of $binding => $value relations. Read 
-     * self::bind method documentation for details.
+     * $relations should represent an array of $binding => $value relations. 
+     * Read self::bind method documentation for details.
      */
     public static function bindMultiple(array $relations) : self
     {
@@ -102,8 +105,8 @@ Final Class Renderer
     }
 
     /**
-     * Registers multiple $blocks using sef::reveal method for each of them so makes 
-     * them visible. Read self::reveal method documentation for details.
+     * Registers multiple $blocks using sef::reveal method for each of them so 
+     * makes them visible. Read self::reveal method documentation for details.
      */
     public static function revealMultiple(array $blocks) : self
     {

@@ -60,7 +60,8 @@ Final Class DB
         if (!$driver instanceof DBDriver) {
 
             $driver = DBDriver::tryFrom($driver)
-                ?? throw new \LogicException('The specified database "driver" is not supported.');
+                ?? throw new \LogicException('The specified database "driver" 
+                    is not supported.');
         }
 
         self::$driver = $driver;
@@ -72,7 +73,8 @@ Final Class DB
             $path = Config::db('path');
 
             if ($path === null)
-                throw new \LogicException('The field "path" is not set in the database config.');
+                throw new \LogicException('The field "path" is not set in the 
+                    database config.');
 
             self::$DSN .= $path;
 
@@ -123,10 +125,12 @@ Final Class DB
         } else {
 
             if ($user === null)
-                throw new \LogicException('The field "user" is not set in the database config.');
+                throw new \LogicException('The field "user" is not set in the 
+                    database config.');
 
             if ($pass === null)
-                throw new \LogicException('The field "pass" is not set in the database config.');
+                throw new \LogicException('The field "pass" is not set in the 
+                    database config.');
 
         }
 
@@ -141,7 +145,8 @@ Final Class DB
             // information.
             error_log("Database connection error: {$e->getMessage()}");
 
-            throw new \LogicException('Database connection error, check the logs for details.');
+            throw new \LogicException('Database connection error, check the 
+                logs for details.');
 
         }
     }

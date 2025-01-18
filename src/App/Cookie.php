@@ -13,8 +13,8 @@ Abstract Class Cookie
     }
 
     /**
-     * Gets the cookie specified by $name. Returns an empty string if the cookie is 
-     * not set.
+     * Gets the cookie specified by $name. Returns an empty string if the
+     * cookie is not set.
      */
     public static function get(string $name) : string
     {
@@ -39,7 +39,8 @@ Abstract Class Cookie
     }
 
     /**
-     * Deletes the cookie specified by $name. Returns false in case of an error.
+     * Deletes the cookie specified by $name. Returns false in case of an
+     * error.
      */
     public static function unset(string $name) : bool
     {
@@ -54,7 +55,8 @@ Abstract Class Cookie
     public static function setForDays(string $name, string $value = '', int $days = 1, array $options = []) : bool
     {
         if ($days < 1)
-            throw new \InvalidArgumentException('"int $days" must be greater than or equal to 1.');
+            throw new \InvalidArgumentException('"int $days" must be greater
+                than or equal to 1.');
 
         $options['expires'] = time() + $days * 86400;
 
@@ -69,7 +71,8 @@ Abstract Class Cookie
     public static function setForMinutes(string $name, string $value = '', int $minutes = 1, array $options = []) : bool
     {
         if ($minutes < 1) 
-            throw new \InvalidArgumentException('"int $minutes" must be greater than or equal to 1.');
+            throw new \InvalidArgumentException('"int $minutes" must be greater 
+                than or equal to 1.');
 
         $options['expires'] = time() + $minutes * 3600;
 
@@ -84,7 +87,8 @@ Abstract Class Cookie
     public static function setForSeconds(string $name, string $value = '', int $seconds = 1, array $options = []) : bool
     {
         if ($seconds < 1)
-            throw new \InvalidArgumentException('"int $seconds" must be greater than or equal to 1.');
+            throw new \InvalidArgumentException('"int $seconds" must be greater 
+                than or equal to 1.');
 
         $options['expires'] = time() + $seconds * 3600;
 

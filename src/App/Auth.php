@@ -423,15 +423,6 @@ Abstract Class Auth
     }
 
     /**
-     * Returns the current session UUID, or null if the user is
-     * unauthenticated.
-     */
-    public static function getSessionId() : ?string
-    {
-        return self::$session['id'] ?? null;
-    }
-
-    /**
      * Returns the accountId (UUID) associated with the current session,
      * or null if the user is unauthenticated.
      */
@@ -479,9 +470,17 @@ Abstract Class Auth
      */
     protected static function setSessionCookie(array $session) : bool
     {
+        $token = Token::create($session);
+
+        if (!$token) {
+
+            error_log('Unable to encrypt the session token, check the app key.');
+            return false;
+        }
+
         return Cookie::setForDays(
             self::COOKIE_NAME,
-            Token::create($session),
+            $token,
             Config::auth('session_lifetime_days') ?? self::SESSION_LIFETIME_DAYS
         );
     }

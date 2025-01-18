@@ -15,17 +15,30 @@ Abstract Class CSRF
         if (Config::app() === null)
             return;
 
-        if (Cookie::isSet(self::COOKIE_NAME) && Crypt::decrypt(Cookie::get(self::COOKIE_NAME)))
+        if (Cookie::isSet(self::COOKIE_NAME) && Crypt::decrypt(Cookie::get(self::COOKIE_NAME))) 
             return;
 
         try {
 
-            Cookie::set(self::COOKIE_NAME, Crypt::encrypt(random_bytes(32)), ['httponly' => false, 'samesite' => 'Strict']);
+            $CSRFToken = Crypt::encrypt(random_bytes(32));
 
         } catch (\Random\RandomException) {
 
+            error_log('An appropriate source of randomness cannot be found for 
+                the random_bytes() function.');
+
             return;
         }
+
+        if (!$CSRFToken) {
+
+            error_log('Unable to encrypt the CSRF token, check the app key.');
+
+            Cookie::unset(self::COOKIE_NAME);
+            return;
+        }
+
+        Cookie::set(self::COOKIE_NAME, $CSRFToken, ['httponly' => false, 'samesite' => 'Strict']);
     }
 
     /**

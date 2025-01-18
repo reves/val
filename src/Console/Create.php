@@ -5,6 +5,10 @@ namespace Val\Console;
 use Val\{App, Console};
 use Val\App\Renderer;
 
+// TODO: add gitignore
+// TODO: add config/env.php , config/env.dev.php
+// TODO: move app key to config/env.php and set Config::env('key') to config/app.php
+
 Abstract Class Create
 {
     // TODO: preference questions
@@ -114,6 +118,7 @@ Abstract Class Create
             'app'	=> 'app.php.example',
             'auth'	=> 'auth.php.example',
             'db'	=> 'db.php.example',
+            'env'	=> 'env.php.example',
             default	=> 'config.php.example'
         };
 

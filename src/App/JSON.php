@@ -5,9 +5,11 @@ namespace Val\App;
 Abstract Class JSON
 {
     /**
-     * Returns a string containing the JSON representation of the supplied data array, 
-     * or null in case of error. Detailed information on encoding options is available 
-     * at https://riptutorial.com/php/example/2019/encoding-a-json-string.
+     * Returns a string containing the JSON representation of the supplied data 
+     * array, or null in case of error. Detailed information on encoding 
+     * options is available at 
+     * https://riptutorial.com/php/example/2019/encoding-a-json-string.
+     * 
      * Warning (!) it is desirable data array to be associative.
      */
     public static function encode(array $data) : ?string
@@ -33,8 +35,8 @@ Abstract Class JSON
     }
     
     /**
-     * Returns an array of data decoded from the supplied JSON string, or null in case 
-     * of error.
+     * Returns an array of data decoded from the supplied JSON string, or null
+     * in case of error.
      */
     public static function decode(?string $json) : ?array
     {

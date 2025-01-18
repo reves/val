@@ -5,8 +5,8 @@ namespace Val\App;
 Abstract Class Crypt
 {
     /**
-     * Encrypts a message in a Secret-key Authenticated Encryption way. Returns a Base64 
-     * URL safe no padding encoded string or null in case of an error.
+     * Encrypts a message in a Secret-key Authenticated Encryption way. Returns
+     * a Base64 URL safe no padding encoded string or null in case of an error.
      */
     public static function encrypt(?string $message) : ?string
     {
@@ -28,9 +28,9 @@ Abstract Class Crypt
     }
 
     /**
-     * Decrypts Base64 URL safe no padding encoded encrypted message in a Secret-key 
-     * Authenticated Decryption way. Returns the decrypted message or null in case of an 
-     * error.
+     * Decrypts Base64 URL safe no padding encoded encrypted message in a
+     * Secret-key Authenticated Decryption way. Returns the decrypted message
+     * or null in case of an error.
      */
     public static function decrypt(string $encodedEncryptedMessage) : ?string
     {

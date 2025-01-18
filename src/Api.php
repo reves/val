@@ -65,7 +65,8 @@ Class Api
     final protected function onlyGET() : self
     {
         if ($this->flagOnlyPOST)
-            throw new \LogicException('It is not possible to allow only the GET method, only the POST method is already allowed.');
+            throw new \LogicException('It is not possible to allow only the
+                GET method, only the POST method is already allowed.');
 
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
@@ -87,7 +88,8 @@ Class Api
     final protected function onlyPOST() : self
     {
         if ($this->flagOnlyGET)
-            throw new \LogicException('It is not possible to allow only the POST method, only the GET method is already allowed.');
+            throw new \LogicException('It is not possible to allow only the 
+                POST method, only the GET method is already allowed.');
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
@@ -113,7 +115,9 @@ Class Api
     final protected function onlyAuthenticated() : self
     {
         if ($this->flagOnlyUnauthenticated)
-            throw new \LogicException('It is not possible to allow only Authenticated user, only Unauthenticated user is already allowed.');
+            throw new \LogicException('It is not possible to allow only
+                Authenticated user, only Unauthenticated user is already
+                allowed.');
 
         if (Auth::getAccountId()) {
 
@@ -134,7 +138,9 @@ Class Api
     final protected function onlyUnauthenticated() : self
     {
         if ($this->flagOnlyAuthenticated)
-            throw new \LogicException('It is not possible to allow only Unauthenticated user, only Authenticated user is already allowed.');
+            throw new \LogicException('It is not possible to allow only
+                Unauthenticated user, only Authenticated user is already
+                allowed.');
 
         if (!Auth::getAccountId()) {
 
@@ -223,7 +229,8 @@ Class Api
     final protected function val(string $field)
     {
         if (!isset($this->fields[$field]))
-            throw new \InvalidArgumentException('The "' . $field . '" field is not set, make sure it is specified as a required field.');
+            throw new \InvalidArgumentException('The "' . $field . '" field is 
+                not set, make sure it is specified as a required field.');
 
         return $this->fields[$field];
     }
@@ -272,7 +279,8 @@ Class Api
     final protected function respondError(int $code = 500)
     {
         if ($code < 401 || $code > 500)
-            throw new \InvalidArgumentException('The "int $code" parameter value must be between 401 and 500 inclusive.');
+            throw new \InvalidArgumentException('The "int $code" parameter 
+                value must be between 401 and 500 inclusive.');
 
         http_response_code($code);
         App::exit();
@@ -284,7 +292,8 @@ Class Api
      * status code to "400 Bad Request", sends the response and exits the
      * application.
      * 
-     * The response format can be one of the following or a combination of them:
+     * The response format can be one of the following or a combination of
+     * them:
      * 
      *  a) From setFail() method:
      *      ['fail' => [

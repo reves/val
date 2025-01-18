@@ -2,7 +2,7 @@
 
 namespace Val;
 
-use Val\App\{Lang, CSRF, DB, Auth, Renderer};
+use Val\App\{Lang, CSRF, DB, Auth, Renderer, Config};
 
 /**
  * Application entry point.
@@ -11,6 +11,9 @@ Abstract Class App
 {
     // App status
     protected static bool $running = false;
+
+    // Whether is production environment
+    protected static ?bool $isProd = null;
 
     // Directory path constants
     public static string $DIR_ROOT;
@@ -42,12 +45,18 @@ Abstract Class App
         self::$DIR_RESOURCES  = self::$DIR_ROOT . '/resources';
         self::$DIR_VIEW       = self::$DIR_ROOT . '/view';
 
+        // Error reporting
+        if (self::isProd()) {
+
+            ini_set('display_errors', 0);
+        }
+
         // Default timezone
         date_default_timezone_set('UTC');
 
         // Common headers
         header('Cache-Control: no-store, must-revalidate');
-        header('Strict-Transport-Security: max-age=31536000'); // Details: https://hstspreload.org/
+        header('Strict-Transport-Security: max-age=31536000'); // info: https://hstspreload.org/
         header('X-Content-Type-Options: nosniff');
         header('X-Frame-Options: DENY');
 
@@ -75,8 +84,8 @@ Abstract Class App
 
         if ($view) {
 
-            // (!) It is recommended to set 'Content-Security-Policy' header in
-            // the view function.
+            // (!) It is recommended to set 'Content-Security-Policy' header
+            // in the view function.
             $view();
 
         }
@@ -95,16 +104,18 @@ Abstract Class App
             require $path;
             $className = "\\$className";
 
-            return isset($_GET['_action']) ? new $className($_GET['_action']) : new $className;
+            return isset($_GET['_action'])
+                ? new $className($_GET['_action'])
+                : new $className;
         }
 
         return new Api;
     }
 
     /**
-     * Verifies that the contents of a variable can be called as a function from 
-     * App's scope (outside the API classes). Useful for checking if any API's method is 
-     * public.
+     * Verifies that the contents of a variable can be called as a function
+     * from App's scope (outside the API classes). It is used to check if any
+     * of the API's method is public.
      */
     public static function _isCallable($var) : bool
     {
@@ -117,6 +128,25 @@ Abstract Class App
     public static function isApi() : bool
     {
         return isset($_GET['_api']);
+    }
+
+    /**
+     * Returns true if this is a production environment.
+     * 
+     * @throws \LogicException
+     */
+    public static function isProd() : bool
+    {   
+        if (self::$isProd !== null)
+            return self::$isProd; // cached value
+        
+        $env = Config::env();
+
+        if (!$env)
+            throw new \LogicException('Environment configuration file is
+                missing.');
+
+        return self::$isProd = !isset($env['_DEV_']);
     }
 
     /**

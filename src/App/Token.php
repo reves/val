@@ -55,6 +55,7 @@ Abstract Class Token
                 return ($diffInSeconds >= $timeToLive * 86400);
         }
 
-        throw new \InvalidArgumentException('The "$timeScale" parameter must be one of the predefined class constants.');
+        throw new \InvalidArgumentException('The "$timeScale" parameter must be 
+            one of the predefined class constants.');
     }
 }
