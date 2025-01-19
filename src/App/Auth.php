@@ -488,7 +488,7 @@ Abstract Class Auth
     /**
      * Returns the user's IP address, or null if unable to determine.
      */
-    protected static function getIPAddress() : ?string
+    public static function getIPAddress() : ?string
     {
         $headers = [
             'HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_FORWARDED',

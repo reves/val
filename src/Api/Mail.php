@@ -28,35 +28,47 @@ Abstract Class Mail
     public static function send(array $options) : bool
     {
         if (!isset($options['from']))
-            throw new \InvalidArgumentException('The "$options[\'from\']" option is required.');
+            throw new \InvalidArgumentException('The 
+                "$options[\'from\']" option is required.');
 
         if (!isset($options['from']['name']))
-            throw new \InvalidArgumentException('The "$options[\'from\'][\'name\']" option is required.');
+            throw new \InvalidArgumentException('The 
+                "$options[\'from\'][\'name\']" option is required.');
 
         if (!isset($options['from']['address']))
-            throw new \InvalidArgumentException('The "$options[\'from\'][\'address\']" option is required.');
+            throw new \InvalidArgumentException('The 
+                "$options[\'from\'][\'address\']" option is required.');
 
         if (!isset($options['to']))
-            throw new \InvalidArgumentException('The "$options[\'to\']" option is required.');
+            throw new \InvalidArgumentException('The
+                "$options[\'to\']" option is required.');
 
         if (empty($options['to']))
-            throw new \InvalidArgumentException('The "$options[\'to\']" option does not contain any addresses.');
+            throw new \InvalidArgumentException('The 
+                "$options[\'to\']" option does not contain any addresses.');
 
         $options = [
             'from' => $options['from'],
             'to' => $options['to'],
             'cc' => $options['cc'] ?? [],
             'bcc' => $options['bcc'] ?? [],
-            'subject' => $options['subject'] ? self::encodeUTF8($options['subject']) : '',
-            'messageHTML' => $options['messageHTML'] ? str_replace('\n.', '\n..', trim($options['messageHTML'])) : '',
-            'messagePlainText' => $options['messagePlainText'] ? str_replace('\n.', '\n..', trim($options['messagePlainText'])) : ''
+            'subject' => $options['subject']
+                ? self::encodeUTF8($options['subject'])
+                : '',
+            'messageHTML' => $options['messageHTML']
+                ? str_replace('\n.', '\n..', trim($options['messageHTML']))
+                : '',
+            'messagePlainText' => $options['messagePlainText']
+                ? str_replace('\n.', '\n..', trim($options['messagePlainText']))
+                : ''
         ];
         
         // Prepare headers
         $uid = md5(uniqid());
 
         $headers = [
-            'From' => self::encodeUTF8($options['from']['name']) . ' <' . self::encodeUTF8($options['from']['address']) . '>',
+            'From' => self::encodeUTF8($options['from']['name']) 
+                . ' <' . self::encodeUTF8($options['from']['address']) . '>',
             'MIME-Version' => '1.0',
             'Content-Type' => "multipart/alternative; boundary{$uid}"
         ];
@@ -110,7 +122,8 @@ Abstract Class Mail
     }
 
     /**
-     * Formats email addresses to a string that can be safely included in the header.
+     * Formats email addresses to a string that can be safely included in the
+     * header.
      */
     protected static function formatAddresses(array $address) : string
     {
@@ -132,12 +145,14 @@ Abstract Class Mail
     }
 
     /**
-     * Removes ASCII control characters, including any carriage return, line feed or 
-     * tab characters. Returns the resulting string in UTF-8 format.
+     * Removes ASCII control characters, including any carriage return, line 
+     * feed or tab characters. Returns the resulting string in UTF-8 format.
      */
     protected static function encodeUTF8(string $data) : string
     {
-        return '=?UTF-8?Q?' . imap_8bit(trim(filter_var($data, FILTER_UNSAFE_RAW, FILTER_FLAG_STRIP_LOW))) . '?=';
+        return '=?UTF-8?Q?' 
+            . imap_8bit(trim(filter_var($data, FILTER_UNSAFE_RAW, FILTER_FLAG_STRIP_LOW)))
+            . '?=';
     }
 
 }
