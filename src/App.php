@@ -73,7 +73,6 @@ Abstract Class App
             header('Content-type: application/json; charset=utf-8');
 
             self::loadApi();
-
             return;
         }
 
@@ -87,29 +86,42 @@ Abstract Class App
             // (!) It is recommended to set 'Content-Security-Policy' header
             // in the view function.
             $view();
-
         }
     }
 
     /**
-     * Loads and calls the requested API endpoint (& method).
+     * Loads the requested API endpoint object.
      */
     protected static function loadApi() : Api
     {
-        $className = ucfirst($_GET['_api']);
+        $regex = '/^[a-zA-Z]{1,50}$/';
+        $api = $_GET['_api'];
+
+        if (!preg_match($regex, $api))
+            return new Api;
+
+        // Get the API Class.
+        $className = ucfirst($api);
         $path = self::$DIR_API . "/{$className}.php";
 
-        if (is_file($path)) {
+        if (!is_file($path))
+            return new Api;
 
-            require $path;
-            $className = "\\$className";
+        require $path;
 
-            return isset($_GET['_action'])
-                ? new $className($_GET['_action'])
-                : new $className;
-        }
+        $className = "\\$className";
+        $action = $_GET['_action'];
 
-        return new Api;
+        // Create the API object and return it back to the App, so the magic
+        // method "__invoke()" could be called (meaning the default action).
+        if (!$action)
+            return new $className;
+        
+        // If the Action is specified, pass it to the API Class constructor,
+        // so it will call the Action and then App::exit().
+        return preg_match($regex, $action)
+            ? new $className($action)
+            : new Api;
     }
 
     /**

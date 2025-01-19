@@ -4,8 +4,10 @@
     </IfModule>
 
     DirectorySlash Off
-
     RewriteEngine On
+
+    # Api
+    RewriteRule ^api/([a-zA-Z]{1,50})(?:/([a-zA-Z]{1,50}))?$ index.php?_api=$1&_action=$2 [NC,QSA,L]
 
     # Replace all the 2+ slashes with a slash in the request
     RewriteCond %{THE_REQUEST} \s[^?]*//
@@ -15,11 +17,9 @@
     RewriteCond %{REQUEST_URI} (.+)/$
     RewriteRule ^ %1 [L,R=301]
 
-    # Api
-    RewriteRule ^api/([a-zA-Z]{1,50})/([a-zA-Z]{1,50})$ index.php?_api=$1&_action=$2 [NC,QSA,L]
-    RewriteRule ^api/([a-zA-Z]{1,50})$ index.php?_api=$1 [NC,QSA,L]
-
     # View
     RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_URI} !^/favicon\.ico$
+    RewriteCond %{REQUEST_URI} !^/robots\.txt$
     RewriteRule ^ index.php [L]
 </IfModule>
