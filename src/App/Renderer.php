@@ -28,17 +28,19 @@ Final Class Renderer
     /**
      * Initializes the Renderer module.
      */
-    public static function init() : self
+    public static function init() : void
     {
-        self::$directoryPath = App::$DIR_VIEW;
+        if (self::$instance)
+            return;
 
-        return self::$instance ?? self::$instance = new self;
+        self::$directoryPath = App::$DIR_VIEW;
+        self::$instance = new self;
     }
 
     /**
-     * Sets the path to the directory where templates are located.
+     * Sets the path to the templates directory.
      */
-    public static function from(string $directoryPath) : self
+    public static function setPath(string $directoryPath) : self
     {
         self::$directoryPath = rtrim($directoryPath, '/');
 
@@ -46,10 +48,9 @@ Final Class Renderer
     }
 
     /**
-     * Loads a template. Throws an Exception if the specified template file is 
-     * missing.
+     * Loads the template file.
      * 
-     * @throws \RuntimeException
+     * @throws \RuntimeException - if the specified template file is missing.
      */
     public static function load(string $file, bool $minify = true) : self
     {
@@ -79,6 +80,7 @@ Final Class Renderer
     public static function bind(string $binding, string $value = '') : self
     {
         self::$bindings[$binding] = $value;
+
         return self::$instance;
     }
 
@@ -101,6 +103,7 @@ Final Class Renderer
     public static function reveal($block) : self
     {
         self::$blocks[] = $block;
+
         return self::$instance;
     }
 
@@ -138,7 +141,9 @@ Final Class Renderer
     protected static function minify(string $template) : string
     {   
         // Remove: "\r\n\t" 1+  |   "space" 2+  |   HTML comments
-        return (self::$minify) ? preg_replace('/([\r\n\t]+)|([ ]{2,})|(<!--.*?-->)/', '', $template) : $template;
+        return self::$minify
+            ? preg_replace('/([\r\n\t]+)|([ ]{2,})|(<!--.*?-->)/', '', $template)
+            : $template;
     }
 
     /**
@@ -165,8 +170,9 @@ Final Class Renderer
             if (is_file($path)) {
 
                 $template = self::minify(file_get_contents($path));
-                self::$content = preg_replace('/' . preg_quote($match[0], '/') . '/', $template, self::$content);
-            
+
+                self::$content = preg_replace('/' . preg_quote($match[0], '/') 
+                    . '/', $template, self::$content);
             }
         }
 
@@ -174,7 +180,7 @@ Final Class Renderer
     }
 
     /**
-     * Leaves only registered blocks and remove others.
+     * Leaves only the registered blocks and removes others.
      */
     protected static function compileBlocks() : self
     {
@@ -182,7 +188,6 @@ Final Class Renderer
         foreach (self::$blocks as $block ) {
 
             self::$content = preg_replace("/(\[{$block}\])|(\[\/{$block}\])/i", '', self::$content);
-
         }
 
         // Remove Inactive Blocks
@@ -200,7 +205,6 @@ Final Class Renderer
         foreach (self::$bindings as $binding => $value) {
 
             self::$content = preg_replace("/\{{$binding}\}/i", $value, self::$content);
-
         }
 
         return self::$instance;

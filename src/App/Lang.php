@@ -26,7 +26,7 @@ Abstract Class Lang
 
         // Handle language code in the URL path.
 
-        if (App::isApi() || !Config::app('languages'))
+        if (App::isApiRequest() || !Config::app('languages'))
             return;
 
         $code = strtok($_SERVER["REQUEST_URI"] ?? '', '/');

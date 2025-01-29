@@ -544,7 +544,7 @@ Abstract Class Auth
         foreach ($list as $browserVer) $browser .= ' ' . strtok($browserVer, '/');
 
         return [
-            // substr for a more efficient storage of utf8mb4 varchar(63)
+            // substr for a more efficient storage in db (utf8mb4 varchar(63))
             'system' => substr($system, 0, 63),
             // remove the extra space character at the beginning
             'browser' => substr($browser, 1, 63)
