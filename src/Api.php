@@ -406,21 +406,26 @@ Class Api
             throw new \LogicException("Missing the required field \"$field\".");
         }
 
-        if ($this->flagOnlyGET && isset($_GET[$field])) {
+        if ($this->flagOnlyGET) {
 
-            $this->fields[$field] = $_GET[$field];
-            return;
-        }
+            if (isset($_GET[$field])) {
 
-        if ($this->flagOnlyPOST && isset($_POST[$field])) {
+                $this->fields[$field] = $_GET[$field];
+                return;
+            }
 
-            $this->fields[$field] = $_POST[$field];
-            return;
-        }
+        } else if ($this->flagOnlyPOST) {
 
-        if (isset($_REQUEST[$field])) { 
+            if (isset($_POST[$field])) {
 
-            $this->fields[$field] = $_REQUEST[$field]; // priority: COOKIE, POST, GET
+                $this->fields[$field] = $_POST[$field];
+                return;
+            }
+
+        } else if (isset($_REQUEST[$field]) || isset($_FILES[$field])) { 
+
+            // $_REQUEST default priority: COOKIE, POST, GET
+            $this->fields[$field] = $_REQUEST[$field] ?? $_FILES[$field];
             return;
         }
 
@@ -429,8 +434,8 @@ Class Api
             $this->missing[] = $field;
             return;
         }
-
-        $this->fields[$field] = null;
+ 
+        $this->fields[$field] = null; // register the optional field
     }
 
     /**
