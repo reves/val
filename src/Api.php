@@ -35,7 +35,7 @@ Class Api
     /**
      * The API constructor.
      */
-    final private function __construct(
+    final public function __construct(
 
         // Whether the API is called internally (programmatically).
         private ?bool $isInternalCall = null,
@@ -56,48 +56,28 @@ Class Api
      */
     final public static function _load()
     {
-        // Validate the syntax.
-        $regex = '/^[a-zA-Z]{1,50}$/';
         $apiName = $_GET['_api'];
+        $action = $_GET['_action'] ?? null;
 
-        if (!preg_match($regex, $apiName))
+        // Validate syntax.
+        $regex = '/^[a-zA-Z]{1,50}$/';
+
+        if (!preg_match($regex, $apiName) || ($action && !preg_match($regex, $action)))
             return (new Api)->respondError(404);
 
         // Load the API Class.
-        $className = ucfirst($apiName);
-        $path = App::$DIR_API . "/{$className}.php";
+        $className = self::loadApiClass($apiName);
 
-        if (!is_file($path))
-            return (new Api)->respondError(404);
-
-        $className = self::getNamespace($path) . $className;
-        require_once $path;
-
-        if (!class_exists($className))
+        if (!$className)
             return (new Api)->respondError(404);
 
         // Call the action.
-        $action = $_GET['_action'];
-
-        if (!$action) {
-
-            $api = new $className;
-            $api(); // The magic method "__invoke()" is the default action.
-            $api->respondOnFail();
-            return;
-        }
-
-        // Check the action syntax.
-        if (!preg_match($regex, $action))
-            return (new Api)->respondError(404);
-
         $api = new $className;
 
-        // Check whether it is a public method.
-        if (!App::_isCallable([$api, $action]))
-            return (new Api)->respondError(404);
+        if (!$action) $api(); // The magic method "__invoke()" is the default action.
+        else if (App::_isCallable([$api, $action])) $api->$action();
+        else return (new Api)->respondError(404);
 
-        $api->$action();
         $api->respondOnFail();
     }
 
@@ -109,43 +89,42 @@ Class Api
      */
     final public static function peek(string $endpoint, array $params = []) : mixed
     {
-        $endpoint = trim($endpoint, '/');
+        $parts = explode('/', trim($endpoint, '/'), 2);
 
-        if (!$endpoint)
+        if (!$parts[0])
             throw new \LogicException('Invalid API endpoint.');
 
-        $parts = explode('/', $endpoint);
-
-        if (count($parts) > 2)
-            throw new \LogicException('The API endpoint should consist of 
-                no more than 2 parts.');
-
         // Load the API Class.
-        $className = ucfirst($parts[0]);
+        $className = self::loadApiClass($parts[0]);
+
+        if ($className === null)
+            throw new \LogicException('The API Class was not found.');
+
+        // Call the action.
+        $api = new $className(true, $params);
+        $action = $parts[1] ?? null;
+
+        return !$action
+            ? $api()
+            : (App::_isCallable([$api, $action]) ? $api->$action() : null);
+    }
+
+    /**
+     * Loads the requested API Class and returns its fully qualified name, or
+     * null if the class file or class definition is missing.
+     */
+    private static function loadApiClass(string $apiName) : ?string
+    {
+        $className = ucfirst($apiName);
         $path = App::$DIR_API . "/{$className}.php";
 
         if (!is_file($path))
-            throw new \LogicException('The file of the API Class was not 
-                found.');
+            return null;
 
-        $className = self::getNamespace($path) . $className;
         require_once $path;
+        $className = self::getNamespace($path) . $className;
 
-        if (!class_exists($className))
-            throw new \LogicException('The API Class is not defined.');
-        
-        // Call the action.
-        $action = $parts[1] ?? null;
-
-        $api = new $className(true, $params);
-
-        if (!$action)
-            return $api();
-
-        if (App::_isCallable([$api, $action]))
-            return $api->$action();
-
-        return null;
+        return class_exists($className) ? $className : null;
     }
 
     /**
@@ -175,13 +154,13 @@ Class Api
             throw new \LogicException('It is not possible to allow only the
                 GET method, only the POST method is already allowed.');
 
-        if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 
-            $this->flagOnlyGET = true;
-            return $this;
+            $this->respondError(405); // Method Not Allowed
         }
 
-        $this->respondError(405);
+        $this->flagOnlyGET = true;
+        return $this;
     }
 
     /**
@@ -201,18 +180,18 @@ Class Api
             throw new \LogicException('It is not possible to allow only the 
                 POST method, only the GET method is already allowed.');
 
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
-            if(CSRF::tokensMatch()) {
-
-                $this->flagOnlyPOST = true;
-                return $this;
-            }
-
-            $this->respondError(403);
+            $this->respondError(405); // Method Not Allowed
         }
 
-        $this->respondError(405);
+        if (!CSRF::tokensMatch()) {
+
+            $this->respondError(403); // Forbidden
+        }
+
+        $this->flagOnlyPOST = true;
+        return $this;
     }
     
     /**
@@ -229,17 +208,17 @@ Class Api
                 Authenticated user, because the option "allow only 
                 Unauthenticated user" was set.');
 
-        if (Auth::getAccountId()) {
+        if (!Auth::getAccountId()) {
 
-            $this->flagOnlyAuthenticated = true;
-            return $this;
+            if ($this->isInternalCall)
+                throw new \LogicException('Peeking an API endpoint that allows 
+                "only Authenticated user", but the user is not authenticated.');
+
+            $this->respondError(401);
         }
 
-        if ($this->isInternalCall)
-            throw new \LogicException('Peeking an API endpoint that allows 
-            "only Authenticated user", but the user is not authenticated.');
-
-        $this->respondError(401);
+        $this->flagOnlyAuthenticated = true;
+        return $this;
     }
 
     /**
@@ -256,17 +235,17 @@ Class Api
                 Unauthenticated user, because the option "allow only 
                 Authenticated user" was set.');
 
-        if (!Auth::getAccountId()) {
+        if (Auth::getAccountId()) {
 
-            $this->flagOnlyUnauthenticated = true;
-            return $this;
+            if ($this->isInternalCall)
+                throw new \LogicException('Peeking an API endpoint that allows 
+                "only Unauthenticated user", but the user is authenticated.');
+            
+            $this->respondError(403);
         }
 
-        if ($this->isInternalCall)
-            throw new \LogicException('Peeking an API endpoint that allows 
-            "only Unauthenticated user", but the user is authenticated.');
-        
-        $this->respondError(403);
+        $this->flagOnlyUnauthenticated = true;
+        return $this;
     }
 
     /**
@@ -340,42 +319,32 @@ Class Api
         // Register fields.
         foreach ($fields as $field) {
 
-            // Grouped fields, that use the same validation method.
-            if (is_array($field)) {
-
-                foreach ($field as $_field) {
-
-                    $this->registerField($_field, $required);
-                }
-
+            if (!is_array($field)) {
+                $this->registerField($field, $required);
                 continue;
             }
 
-            $this->registerField($field, $required);
+            // Grouped fields (that use the same validation method).
+            foreach ($field as $_field) $this->registerField($_field, $required);
         }
 
         // Send a response if any of the required fields are missing.
-        if ($this->missing) $this->respondOnFail();
+        if ($this->missing) {
+            
+            $this->respondOnFail();
+        }
 
-        // Call the corresponding validation method (if defined) for each
-        // registered field.
+        // For each registered field, call its corresponding validation method 
+        // (if defined).
         foreach ($fields as $field) {
 
-            // Grouped fileds use the validation method of the first field in
-            // the group.
-            if (is_array($field)) {
-                
-                $firstField = $field[0];
-
-                foreach ($field as $_field) {
-
-                    $this->validateField($_field, $firstField);
-                }
-
+            if (!is_array($field)) {
+                $this->validateField($field);
                 continue;
             }
 
-            $this->validateField($field);
+            // Grouped fileds use the validation method of the first field.
+            foreach ($field as $_field) $this->validateField($_field, $field[0]);
         }
 
         return $this->respondOnFail();
@@ -391,56 +360,47 @@ Class Api
     {
         if ($this->isInternalCall) {
 
-            if (isset($this->internalCallParams[$field])) {
+            $value = $this->internalCallParams[$field] ?? null;
 
-                $this->fields[$field] = $this->internalCallParams[$field];
+            if ($value !== null || !$required) {
+                $this->fields[$field] = $value;
                 return;
             }
 
-            if (!$required) {
-
-                $this->fields[$field] = null;
-                return;
-            }
-
-            throw new \LogicException("Missing the required field \"$field\".");
+            throw new \LogicException("Missing required field \"$field\".");
         }
 
-        if ($this->flagOnlyGET) {
+        $value = $this->getFieldValue($field);
 
-            if (isset($_GET[$field])) {
-
-                $this->fields[$field] = $_GET[$field];
-                return;
-            }
-
-        } else if ($this->flagOnlyPOST) {
-
-            if (isset($_POST[$field])) {
-
-                $this->fields[$field] = $_POST[$field];
-                return;
-            }
-
-        } else if (isset($_REQUEST[$field]) || isset($_FILES[$field])) { 
-
-            // $_REQUEST default priority: COOKIE, POST, GET
-            $this->fields[$field] = $_REQUEST[$field] ?? $_FILES[$field];
+        if ($value !== null) {
+            $this->fields[$field] = $value;
             return;
         }
 
         if ($required) {
-
             $this->missing[] = $field;
             return;
         }
- 
+
         $this->fields[$field] = null; // register the optional field
     }
 
     /**
-     * Calls the corresponding validation method (if defined) for the specified
-     * field.
+     * Returns the value of the specified field.
+     */
+    private function getFieldValue(string $field) : mixed
+    {
+        return match(true) {
+            $this->flagOnlyGET => $_GET[$field] ?? null,
+            $this->flagOnlyPOST => $_POST[$field] ?? null,
+            // $_REQUEST default priority: COOKIE, POST, GET
+            default => $_REQUEST[$field] ?? $_FILES[$field] ?? null
+        };
+    }
+
+    /**
+     * Validates the specified field using the its validation method 
+     * (if defined).
      * 
      * @throws \LogicException
      */
@@ -459,12 +419,10 @@ Class Api
             return;
         }
 
-        if ($firstField) {
-
+        if ($firstField)
             throw new \LogicException('The validation method must be defined 
                 when grouping fields, using the name of the first field in the
                 group.');
-        }
     }
 
     /**
@@ -488,11 +446,7 @@ Class Api
      */
     final protected function respondSuccess() : ?bool
     {
-        if ($this->isInternalCall)
-            return true;
-
-        http_response_code(200);
-        App::exit();
+        return !!$this->respond();
     }
 
     /**
@@ -514,12 +468,7 @@ Class Api
      */
     final protected function respondData(array $data) : ?array
     {
-        if ($this->isInternalCall)
-            return $data;
-
-        http_response_code(200);
-        echo JSON::encode($data);
-        App::exit();
+        return $this->respond($data);
     }
 
     /**
@@ -534,15 +483,26 @@ Class Api
     {
         if ($code < 401 || $code > 500)
             throw new \InvalidArgumentException('The "int $code" parameter 
-                value must be between 401 and 500 inclusive.');
+                value must be between 401 and 500, inclusive.');
 
+        $this->respond(null, $code);
+    }
+
+    /**
+     * Responds with optional data and status code, then exits the application.
+     */
+    private function respond(?array $data = null, int $code = 200) : mixed
+    {
         if ($this->isInternalCall) {
 
-            throw new \RuntimeException("An error occured with the status code 
-                \"$code\".");
+            if ($code < 400)
+                return $data ?? true;
+
+            throw new \RuntimeException("API error with status code \"$code\".");
         }
 
         http_response_code($code);
+        if ($data) echo JSON::encode($data);
         App::exit();
     }
 
@@ -580,42 +540,25 @@ Class Api
         $response = [];
 
         // Set the fail status of the request.
-        if ($this->fail) {
-            
-            $response['fail'] = $this->fail;
-        }
+        if ($this->fail) $response['fail'] = $this->fail;
 
-        // List fields that didn't pass validation.
-        if ($this->wrong) {
+        // List fields that didn't pass validation (if any).
+        if ($this->wrong) $response['wrong'] = $this->wrong;
 
-            $response['wrong'] = $this->wrong;
-        }
-
-        // List missing fields
+        // List missing fields (if any).
         if ($this->missing) {
 
-            // Hide missing fields in the production.
-            if (App::isProd()) {
+            // The missing fields are hidden in the production.
+            if (!App::isProd()) $response['missing'] = $this->missing;
+            else $response['fail'] ??= ['status' => 'Invalid request.'];
 
-                if (!$response['fail']) {
-
-                    $response['fail'] = ['status' => 'Invalid request.'];
-                }
-
-            } else {
-
-                $response['missing'] = $this->missing;
-            }
         }
 
         if (!$response)
             return $this;
 
-        if ($this->isInternalCall) {
-            
-            throw new \LogicException('Failed API peek: '
-                . JSON::encode($response));
-        }
+        if ($this->isInternalCall)
+            throw new \LogicException('Failed API peek: ' . JSON::encode($response));
 
         http_response_code(400);
         echo JSON::encode($response);
