@@ -20,46 +20,40 @@ Abstract Class Config
      */
     public static function __callStatic(string $name, array $arguments) : mixed
     {
-        $manyArguments = isset($arguments[1]);
-
-        if ($manyArguments)
+        if (isset($arguments[1]))
             throw new \LogicException('Only one config field can be specified.');
 
-        // Get the config file (if not cached yet).
-        if (!array_key_exists($name, self::$configs)) {
-            
-            $path = App::$DIR_CONFIG . "/{$name}.php";
-            $isDev = false;
+        // Load the config file if not cached yet.
+        if (!array_key_exists($name, self::$configs)) self::loadConfig($name);
 
-            // Environment variables.
-            if ($name == 'env') {
+        return $arguments
+            ? (self::$configs[$name][$arguments[0]] ?? null)
+            : self::$configs[$name]; // No field specified, return the whole config.
+    }
 
-                // As the development env variables take precedence, check if
-                // the corresponding file exists. If so, set this config by 
-                // default for the "::env()" handle.
-                $pathDev = App::$DIR_CONFIG . '/env.dev.php';
-                $isDev = is_file($pathDev);
-                $path = $isDev ? $pathDev : $path;
-            }
+    /**
+     * Loads and caches the configuration file specified by $name.
+     */
+    private static function loadConfig(string $name) : void
+    {
+        $path = App::$DIR_CONFIG . "/{$name}.php";
 
-            if (!$isDev && !is_file($path))
-                return null;
-            
-            // Require and cache the config.
-            self::$configs[$name] = require $path;
+        // Environment config (environment variables) requested.
+        if ($name === 'env') {
 
-            if ($isDev) {
+            // Check if the development env config file exists. If so, assign
+            // this config to the "::env()" handle, as it takes precedence.
+            $pathDev = App::$DIR_CONFIG . '/env.dev.php';
 
+            if (is_file($pathDev)) {
+                self::$configs[$name] = require $pathDev;
                 self::$configs[$name]['_DEV_'] = true; // meta data
+                return;
             }
         }
 
-        // No field specified, return the config itself.
-        if (!$arguments)
-            return self::$configs[$name];
-
-        // Return the specified config field.
-        return self::$configs[$name][$arguments[0]] ?? null;
+        // Load the config file.
+        if (is_file($path)) self::$configs[$name] = require $path;
     }
 
 }

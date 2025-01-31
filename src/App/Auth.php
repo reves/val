@@ -5,6 +5,7 @@ namespace Val\App;
 Abstract Class Auth
 {
     const string COOKIE_NAME = '__Host-passport';
+
     const int SESSION_LIFETIME_DAYS = 365;
     const int SESSION_MAX_OFFLINE_DAYS = 7;
     const int TOKEN_TRUST_SECONDS = 5;
@@ -15,20 +16,16 @@ Abstract Class Auth
     protected static ?array $session = null;
 
     /**
-     * Initializes the authentication module and tries to authenticate the
-     * user. Does nothing, if DB module not initialized or the auth config is
-     * missing.
+     * Initializes authentication and tries to authenticate the user. Does 
+     * nothing if the DB module not initialized or Auth config is missing.
      * 
      * @throws \LogicException
      */
     public static function init() : void
     {
-        // Already authenticated.
-        if (self::$session)
-            return;
-
-        // DB mobule not initialized, or Auth configuration file is missing.
-        if (!DB::init() || Config::auth() === null)
+        // Already authenticated, or DB mobule not initialized, or Auth 
+        // configuration file is missing.
+        if (self::$session || !DB::init() || Config::auth() === null)
             return;
 
         if (Config::app() === null)
@@ -40,38 +37,50 @@ Abstract Class Auth
         // Extract data from the session cookie.
         $session = Token::extract(Cookie::get(self::COOKIE_NAME));
 
+        // Unset the invalid auth cookie.
         if ($session === null) {
-
-            // Invalid cookie.
             Cookie::unset(self::COOKIE_NAME);
+            return;
+        }
+        
+        self::$session = $session;
+
+        // Revoke the session if it has expired.
+        if (self::isSessionExpired($session)) {
+            self::revokeSession();
             return;
         }
 
         // Authenticate.
-        self::$session = $session;
+        self::verifySession($session) && self::updateSession($session);
+    }
 
-        if (Token::expired(
+    /**
+     * Returns true if the session has expired, or false otherwise.
+     */
+    private static function isSessionExpired(array $session) : bool
+    {
+        return
+            // Session has reached its definitive expiration date.
+            Token::expired(
                 $session['signedInAt'],
                 Config::auth('session_lifetime_days') ?? self::SESSION_LIFETIME_DAYS,
-                Token::TIME_DAYS)
-        ) {
-
-            // Session has reached its definitive expiration date.
-            self::revokeSession();
-            return;
-        }
-
-        if (Token::expired(
+                Token::TIME_DAYS
+            )
+            ||
+            // The user was offline for too long.
+            Token::expired(
                 $session['lastSeenAt'],
                 Config::auth('session_max_offline_days') ?? self::SESSION_MAX_OFFLINE_DAYS,
-                Token::TIME_DAYS)
-        ) {
+                Token::TIME_DAYS
+            );
+    }
 
-            // The user was offline for too long.
-            self::revokeSession();
-            return;
-        }
-
+    /**
+     * Verifies that the session is valid.
+     */
+    private static function verifySession(array $session) : bool
+    {
         if (!Token::expired(
                 $session['sessionLastVerifyAt'],
                 Config::auth('token_trust_seconds') ?? self::TOKEN_TRUST_SECONDS,
@@ -79,9 +88,9 @@ Abstract Class Auth
         ) {
 
             // To avoid hitting the database and parsing the User-Agent on
-            // every request, trust the token for a certain amount of time
-            // before verifying the session again.
-            return;
+            // every request, skip verification and trust the token for a 
+            // certain amount of time.
+            return false; // prevent updateSession() from being called.
         }
 
         // Check if the User-Agent signature has changed (e.g. cookie theft).
@@ -93,62 +102,62 @@ Abstract Class Auth
                 $device['system'] !== $session['device']['system'] ||
                 $device['browser'] !== $session['device']['browser']
             ) {
-
                 self::revokeSession();
-                return;
+                return false;
             }
         }
 
-        // Session verification.
+        // Check if the session exists in the database.
         $result = DB::prepare(match (DB::$driver) {
-
             DBDriver::MySQL =>
                 'SELECT 1 FROM `sessions` WHERE `Id` = UUID_TO_BIN(:id)',
-
             DBDriver::PostgreSQL, DBDriver::SQLite =>
                 'SELECT 1 FROM "sessions" WHERE "Id" = :id',
-
         })->bind(':id', $session['id'])->single();
 
         if (!$result) {
-
             // The session has been revoked.
             Cookie::unset(self::COOKIE_NAME);
             self::$session = null;
-            return;
+            return false;
         }
 
+        return true;
+    }
+
+    /**
+     * Updates the session data if needed.
+     */
+    private static function updateSession(array $session) : void
+    {
         // Update the "last verify" data.
         self::$session['sessionLastVerifyAt'] = DB::dateTime();
 
-        // Update the "last seen" data.
+        // Check if enough time has passed since the "last seen" data update.
         if (!Token::expired(
                 self::$session['lastSeenAt'],
                 Config::auth('session_update_seconds') ?? self::SESSION_UPDATE_SECONDS,
                 Token::TIME_SECONDS)
         ) {
-
+            // Not enough time passed, just commit the "last verify" data.
             self::setSessionCookie(self::$session);
-
-            // Not enough time passed since the "last seen" data update.
             return;
         }
 
+        // Update the "last seen" data.
         $IPAddress = self::$session['lastSeenIPAddress'] = self::getIPAddress();
         self::$session['lastSeenAt'] = self::$session['sessionLastVerifyAt'];
 
+        // Update the session data in the database.
         DB::prepare(match (DB::$driver) {
-
             DBDriver::MySQL =>
                 'UPDATE `sessions` SET `LastSeenAt` = :lastSeenAt,
                     `LastSeenIPAddress` = :lastSeenIPAddress
                     WHERE `Id` = UUID_TO_BIN(:id)',
-
             DBDriver::PostgreSQL, DBDriver::SQLite =>
                 'UPDATE "sessions" SET "LastSeenAt" = :lastSeenAt,
                     "LastSeenIPAddress" = :lastSeenIPAddress
                     WHERE "Id" = :id'
-
         })->bindMultiple([
             ':id' => $session['id'],
             ':lastSeenAt' => self::$session['sessionLastVerifyAt'],
@@ -158,13 +167,13 @@ Abstract Class Auth
         ])->execute();
 
         if (!DB::rowCount()) {
-
-            // Unable to update in the database.
+            // Unable to update in the database, revoke the session.
             Cookie::unset(self::COOKIE_NAME);
             self::$session = null;
             return;
         }
 
+        // Update the session cookie.
         self::setSessionCookie(self::$session);
     }
 
@@ -185,28 +194,26 @@ Abstract Class Auth
         // deleted).
         self::removeExpiredSessions($accountId);
 
-        // Check the number of active sessions.
+        // Check if the user has reached the maximum number of active sessions.
         $maxActiveSessions = Config::auth('max_active_sessions')
             ?? self::MAX_ACTIVE_SESSIONS;
 
         if ($maxActiveSessions) {
 
             $activeSessionsCount = DB::prepare(match (DB::$driver) {
-
                 DBDriver::MySQL =>
                     'SELECT COUNT(*) AS `Count` FROM `sessions`
                         WHERE `AccountId` = UUID_TO_BIN(:accountId)',
-
                 DBDriver::PostgreSQL, DBDriver::SQLite =>
                     'SELECT COUNT(*) AS "Count" FROM "sessions"
                         WHERE "AccountId" = :accountId',
-
             })->bind(':accountId', $accountId)->single()['Count'];
 
-            if ($activeSessionsCount > $maxActiveSessions)
+            if ($activeSessionsCount >= $maxActiveSessions)
                 return false;
         }
 
+        // Create a new session.
         $sessionId = UUID::generate();
         $timeNow = DB::dateTime();
         $device = self::getDevice();
@@ -217,19 +224,16 @@ Abstract Class Auth
 
         // Save the session data to the database.
         $result = DB::prepare(match (DB::$driver) {
-
             DBDriver::MySQL =>
                 'INSERT INTO `sessions` VALUES (
                     UUID_TO_BIN(:id), UUID_TO_BIN(:accountId), :signedInAt,
                     :lastSeenAt, :signedInIPAddress, :lastSeenIPAddress, 
                     :deviceSystem, :deviceBrowser)',
-
             DBDriver::PostgreSQL, DBDriver::SQLite =>
                 'INSERT INTO "sessions" VALUES (
                     :id, :accountId, :signedInAt, :lastSeenAt,
                     :signedInIPAddress, :lastSeenIPAddress, :deviceSystem,
                     :deviceBrowser)'
-
         })->bindMultiple([
             ':id'                => $sessionId,
             ':accountId'         => $accountId,
@@ -256,10 +260,8 @@ Abstract Class Auth
             'sessionLastVerifyAt' => $timeNow
         ];
 
-        // Create the session cookie.
-        $result = self::setSessionCookie($session);
-
-        if (!$result)
+        // Set the session cookie.
+        if (!self::setSessionCookie($session))
             return false;
 
         self::$session = $session;
@@ -281,29 +283,21 @@ Abstract Class Auth
 
         $id ??= self::$session['id'];
 
-        // Remove the current session data.
+        // Remove current session data.
         if ($id === self::$session['id']) {
-
             Cookie::unset(self::COOKIE_NAME);
             self::$session = null;
         }
 
         // Remove the session from the database.
         DB::prepare(match (DB::$driver) {
-
             DBDriver::MySQL =>
                 'DELETE FROM `sessions` WHERE `Id` = UUID_TO_BIN(:id)',
-
             DBDriver::PostgreSQL, DBDriver::SQLite =>
                 'DELETE FROM "sessions" WHERE "Id" = :id'
-
         })->bind(':id', $id)->execute();
 
-        if (DB::rowCount())
-            return true;
-
-        // Session not found in the database.
-        return false;
+        return !!DB::rowCount();
     }
 
     /**
@@ -318,30 +312,21 @@ Abstract Class Auth
         if (!self::$session)
             throw new \LogicException('User unauthenticated.');
 
-        $accountId = self::$session['accountId'];
-
-        // Remove the current session data.
+        // Remove current session data.
         Cookie::unset(self::COOKIE_NAME);
         self::$session = null;
 
         // Remove all the user's sessions from the database.
         DB::prepare(match (DB::$driver) {
-
              DBDriver::MySQL =>
                 'DELETE FROM `sessions`
                     WHERE `AccountId` = UUID_TO_BIN(:accountId)',
-
             DBDriver::PostgreSQL, DBDriver::SQLite =>
                 'DELETE FROM "sessions"
                     WHERE "AccountId" = :accountId'
+        })->bind(':accountId', self::$session['accountId'])->execute();
 
-        })->bind(':accountId', $accountId)->execute();
-
-        if (DB::rowCount())
-            return true;
-
-        // No sessions found in the database.
-        return false;
+        return !!DB::rowCount();
     }
 
     /**
@@ -360,28 +345,21 @@ Abstract Class Auth
         // Remove all the user's sessions from the database, except the
         // current session.
         DB::prepare(match (DB::$driver) {
-
              DBDriver::MySQL =>
                 'DELETE FROM `sessions`
                     WHERE `AccountId` = UUID_TO_BIN(:accountId)
-                        AND `Id` <> UUID_TO_BIN(:id)',
-
+                    AND `Id` <> UUID_TO_BIN(:id)',
             DBDriver::PostgreSQL, DBDriver::SQLite =>
                 'DELETE FROM "sessions"
                     WHERE "AccountId" = :accountId
-                        AND "Id" <> :id'
-
+                    AND "Id" <> :id'
         })->bindMultiple([
             ':accountId' => self::$session['accountId'],
             ':id' => self::$session['id'],
         ])
         ->execute();
 
-        if (DB::rowCount())
-            return true;
-
-        // No other sessions found in the database.
-        return false;
+        return !!DB::rowCount();
     }
 
     /**
@@ -398,28 +376,21 @@ Abstract Class Auth
 
         // Remove all the expired sessions from the database.
         DB::prepare(match (DB::$driver) {
-
              DBDriver::MySQL =>
                 'DELETE FROM `sessions`
                     WHERE `AccountId` = UUID_TO_BIN(:accountId)
-                        AND `SignedInAt` < :cutoffDateTime',
-
+                    AND `SignedInAt` < :cutoffDateTime',
             DBDriver::PostgreSQL, DBDriver::SQLite =>
                 'DELETE FROM "sessions"
                     WHERE "AccountId" = :accountId
-                        AND "SignedInAt" < :cutoffDateTime',
-
+                    AND "SignedInAt" < :cutoffDateTime',
         })->bindMultiple([
             ':accountId' => $accountId,
             ':cutoffDateTime' => $cutoffDateTime
         ])
         ->execute();
 
-        if (DB::rowCount())
-            return true;
-
-        // No expired sessions found in the database.
-        return false;
+        return !!DB::rowCount();
     }
 
     /**
@@ -473,7 +444,6 @@ Abstract Class Auth
         $token = Token::create($session);
 
         if (!$token) {
-
             error_log('Unable to encrypt the session token, check the app key.');
             return false;
         }
@@ -491,8 +461,12 @@ Abstract Class Auth
     public static function getIPAddress() : ?string
     {
         $headers = [
-            'HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_FORWARDED',
-            'HTTP_X_CLUSTER_CLIENT_IP', 'HTTP_FORWARDED_FOR', 'HTTP_FORWARDED',
+            'HTTP_CLIENT_IP',
+            'HTTP_X_FORWARDED_FOR',
+            'HTTP_X_FORWARDED',
+            'HTTP_X_CLUSTER_CLIENT_IP',
+            'HTTP_FORWARDED_FOR',
+            'HTTP_FORWARDED',
             'REMOTE_ADDR'
         ];
 
@@ -518,7 +492,7 @@ Abstract Class Auth
      */
     protected static function getDevice(?string $userAgent = null) : ?array
     {
-        $UA = $userAgent ?? $_SERVER['HTTP_USER_AGENT'];
+        $UA = $userAgent ?? $_SERVER['HTTP_USER_AGENT'] ?? '';
 
         // User-Agent header not set, or empty
         if (!$UA)
@@ -541,7 +515,8 @@ Abstract Class Auth
 
         // Strip browsers versions.
         $browser = '';
-        foreach ($list as $browserVer) $browser .= ' ' . strtok($browserVer, '/');
+        foreach ($list as $browserVer)
+            $browser .= ' ' . strtok($browserVer, '/');
 
         return [
             // substr for a more efficient storage in db (utf8mb4 varchar(63))

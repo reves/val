@@ -132,7 +132,6 @@ Abstract Class Mail
         foreach ($address as $name => $email) {
 
             if (is_string($name) && $name) {
-
                 $name = self::encodeUTF8($name);
                 $result .= "{$name} <{$email}>, ";
                 continue;

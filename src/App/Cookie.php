@@ -26,16 +26,14 @@ Abstract Class Cookie
      */
     public static function set(string $name, string $value = '', array $options = []) : bool
     {
-        $options = [
-            'expires'   => $options['expires']  ?? 0,
-            'path'      => $options['path']     ?? '/',
-            'domain'    => $options['domain']   ?? '',
-            'secure'    => $options['secure']   ?? true,
-            'httponly'  => $options['httponly'] ?? true,
-            'samesite'  => $options['samesite'] ?? 'Lax'
-        ];
-        
-        return setcookie($name, $value, $options);
+        return setcookie($name, $value, $options += [
+            'expires'   => 0,
+            'path'      => '/',
+            'domain'    => '',
+            'secure'    => true,
+            'httponly'  => true,
+            'samesite'  => 'Lax'
+        ]);
     }
 
     /**
@@ -59,7 +57,6 @@ Abstract Class Cookie
                 than or equal to 1.');
 
         $options['expires'] = time() + $days * 86400;
-
         return self::set($name, $value, $options);
     }
 
@@ -74,8 +71,7 @@ Abstract Class Cookie
             throw new \InvalidArgumentException('"int $minutes" must be greater 
                 than or equal to 1.');
 
-        $options['expires'] = time() + $minutes * 3600;
-
+        $options['expires'] = time() + $minutes * 60;
         return self::set($name, $value, $options);
     }
 
@@ -90,8 +86,7 @@ Abstract Class Cookie
             throw new \InvalidArgumentException('"int $seconds" must be greater 
                 than or equal to 1.');
 
-        $options['expires'] = time() + $seconds * 3600;
-
+        $options['expires'] = time() + $seconds;
         return self::set($name, $value, $options);
     }
 

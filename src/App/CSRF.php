@@ -49,12 +49,10 @@ Abstract Class CSRF
     {
         $cookie = Cookie::get(self::COOKIE_NAME);
 
-        return (
-            $cookie && 
+        return $cookie && 
             isset($_SERVER['HTTP_X_CSRF_TOKEN']) && 
             Crypt::decrypt($cookie) &&
-            $_SERVER['HTTP_X_CSRF_TOKEN'] === $cookie
-        );
+            $_SERVER['HTTP_X_CSRF_TOKEN'] === $cookie;
     }
     
 }

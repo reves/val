@@ -8,8 +8,8 @@ Abstract Class Token
 {
     const TIME_SECONDS = 'seconds';
     const TIME_MINUTES = 'minutes';
-    const TIME_HOURS = 'hours';
-    const TIME_DAYS = 'days';
+    const TIME_HOURS   = 'hours';
+    const TIME_DAYS    = 'days';
 
     /**
      * Creates a new token by encoding data in JSON format and encrypting it.
@@ -40,22 +40,13 @@ Abstract Class Token
     {
         $diffInSeconds = time() - strtotime($createdAt);
 
-        switch ($timeScale) {
-
-            case (self::TIME_SECONDS):
-                return ($diffInSeconds >= $timeToLive);
-
-            case (self::TIME_MINUTES):
-                return ($diffInSeconds >= $timeToLive * 60);
-
-            case (self::TIME_HOURS):
-                return ($diffInSeconds >= $timeToLive * 3600);
-
-            case (self::TIME_DAYS):
-                return ($diffInSeconds >= $timeToLive * 86400);
-        }
-
-        throw new \InvalidArgumentException('The "$timeScale" parameter must be 
-            one of the predefined class constants.');
+        return match($timeScale) {
+            self::TIME_SECONDS => $diffInSeconds >= $timeToLive,
+            self::TIME_MINUTES => $diffInSeconds >= $timeToLive * 60,
+            self::TIME_HOURS   => $diffInSeconds >= $timeToLive * 3600,
+            self::TIME_DAYS    => $diffInSeconds >= $timeToLive * 86400,
+            default => throw new \InvalidArgumentException('The "$timeScale" 
+                parameter must be one of the predefined class constants.')
+        };
     }
 }

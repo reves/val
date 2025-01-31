@@ -19,9 +19,7 @@ Abstract Class UUID
 
         // The new UUID should not be generated in the same millisecond as the
         // previous one, so we increment the timestamp if necessary.
-        if ($time == self::$lastTime) {
-            $time = self::$lastTime + 1;
-        }
+        if ($time == self::$lastTime) $time = self::$lastTime + 1;
 
         // Generate random data.
         try {

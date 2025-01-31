@@ -56,10 +56,8 @@ Abstract Class Crypt
      */
     protected static function getSecretKey() : string
     {
-        $encryptedKey = Config::app('key');
-
-        if (!$encryptedKey)
-            throw new \LogicException('The application secret key is not set.');
+        $encryptedKey = Config::app('key') ?: throw new \LogicException('The 
+            application secret key is not set.');
 
         return sodium_base642bin($encryptedKey, \SODIUM_BASE64_VARIANT_ORIGINAL_NO_PADDING);
     }

@@ -63,16 +63,14 @@ Abstract Class Lang
     protected static function detect() : bool
     {
         // From cookie
-        if (
-            Cookie::isSet(self::COOKIE_NAME) &&
+        if (Cookie::isSet(self::COOKIE_NAME) &&
             self::$code = self::parse(Cookie::get(self::COOKIE_NAME))
         ) {
             return self::updateCookie();
         }
 
         // From 'Accept-Language' header
-        if (
-            isset($_SERVER['HTTP_ACCEPT_LANGUAGE']) && 
+        if (isset($_SERVER['HTTP_ACCEPT_LANGUAGE']) && 
             self::$code = self::parse(strtok(strtok($_SERVER['HTTP_ACCEPT_LANGUAGE'], ','), ';'))
         ) {
             return self::updateCookie();
@@ -152,12 +150,8 @@ Abstract Class Lang
                 $similar = $supportedCode;
         }
 
-        // Supported language, but not exact match
-        if ($similar)
-            return $similar;
-
-        // Not supported
-        return null;
+        // Either supported language, but not exact match, or Not supported.
+        return $similar;
     }
 
     /**

@@ -105,15 +105,12 @@ Abstract Class App
      * @throws \LogicException
      */
     public static function isProd() : bool
-    {   
+    {
         if (self::$isProd !== null)
             return self::$isProd; // cached value
         
-        $env = Config::env();
-
-        if (!$env)
-            throw new \LogicException('Environment configuration file is
-                missing.');
+        $env = Config::env() ?: throw new \LogicException('Environment 
+            configuration file is missing.');
 
         return self::$isProd = !isset($env['_DEV_']);
     }

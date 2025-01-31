@@ -30,11 +30,10 @@ Final Class Renderer
      */
     public static function init() : void
     {
-        if (self::$instance)
-            return;
-
-        self::$directoryPath = App::$DIR_VIEW;
-        self::$instance = new self;
+        if (!self::$instance) {
+            self::$directoryPath = App::$DIR_VIEW;
+            self::$instance = new self;
+        }
     }
 
     /**
@@ -56,8 +55,8 @@ Final Class Renderer
     {
         self::reset();
         self::$minify = $minify;
-        $path = self::$directoryPath . "/{$file}";
         $directoryPath = self::$directoryPath;
+        $path = $directoryPath . "/{$file}";
 
         if (!is_file($path))
             throw new \RuntimeException("Template file \"{$file}\" is missing 
@@ -151,7 +150,9 @@ Final Class Renderer
      */
     protected static function compile() : self
     {
-        return self::includeTemplates()->compileBlocks()->compileBindings();
+        return self::includeTemplates()
+            ->compileBlocks()
+            ->compileBindings();
     }
 
     /**
@@ -159,8 +160,6 @@ Final Class Renderer
      */
     protected static function includeTemplates() : self
     {
-        $matches = [];
-
         preg_match_all('/\{\@(.*?)\}/', self::$content, $matches, PREG_SET_ORDER);
 
         foreach ($matches as $match) {
@@ -168,11 +167,12 @@ Final Class Renderer
             $path = self::$directoryPath . "/{$match[1]}";
 
             if (is_file($path)) {
-
                 $template = self::minify(file_get_contents($path));
-
-                self::$content = preg_replace('/' . preg_quote($match[0], '/') 
-                    . '/', $template, self::$content);
+                self::$content = preg_replace(
+                    '/' . preg_quote($match[0], '/') . '/',
+                    $template,
+                    self::$content
+                );
             }
         }
 
@@ -185,10 +185,8 @@ Final Class Renderer
     protected static function compileBlocks() : self
     {
         // Leave Active Blocks
-        foreach (self::$blocks as $block ) {
-
+        foreach (self::$blocks as $block )
             self::$content = preg_replace("/(\[{$block}\])|(\[\/{$block}\])/i", '', self::$content);
-        }
 
         // Remove Inactive Blocks
         self::$content = preg_replace('/\[(.*?)\].*?\[\/(\1)\]/is', '', self::$content);
@@ -202,10 +200,8 @@ Final Class Renderer
     protected static function compileBindings() : self
     {
         // Replace Bindings
-        foreach (self::$bindings as $binding => $value) {
-
+        foreach (self::$bindings as $binding => $value)
             self::$content = preg_replace("/\{{$binding}\}/i", $value, self::$content);
-        }
 
         return self::$instance;
     }

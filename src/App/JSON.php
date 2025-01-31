@@ -40,7 +40,8 @@ Abstract Class JSON
      */
     public static function decode(?string $json) : ?array
     {
-        if (!$json) return null;
+        if (!$json)
+            return null;
 
         try {
 

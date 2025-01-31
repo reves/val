@@ -44,13 +44,9 @@ Final Class DB
      */
     public static function init() : bool
     {
-        // Already initialized.
-        if (self::$instance) 
-            return true;
-
-        // Configuration file is missing.
-        if (Config::db() === null)
-            return false;
+        // Already initialized or Configuration is missing.
+        if (self::$instance || Config::db() === null) 
+            return !!self::$instance;
 
         self::$instance = new self;
 
@@ -59,33 +55,41 @@ Final Class DB
 
         if (!$driver instanceof DBDriver) {
 
-            $driver = DBDriver::tryFrom($driver)
-                ?? throw new \LogicException('The specified database "driver" 
-                    is not supported.');
+            $driver = DBDriver::tryFrom($driver) ?? throw new \LogicException(
+                'The specified database "driver" is not supported.');
         }
 
         self::$driver = $driver;
         self::$DSN = $driver->value . ':';
 
-        // SQLite (on-disk only)
-        if ($driver === DBDriver::SQLite) {
+        // Initialize the connection string.
+        return $driver === DBDriver::SQLite 
+            ? self::initSQLite() // SQLite (on-disk only)
+            : self::initSQL(); // MySQL/PostgreSQL
+    }
 
-            $path = Config::db('path');
+    /**
+     * Initialize SQLite connection string.
+     */
+    private static function initSQLite() : bool
+    {
+        $path = Config::db('path') ?? throw new \LogicException('Field "path" 
+            is not set in the database config.');
 
-            if ($path === null)
-                throw new \LogicException('The field "path" is not set in the 
-                    database config.');
+        self::$DSN .= $path;
+        return true;
+    }
 
-            self::$DSN .= $path;
-
-            return true;
-        }
-
-        // MySQL and PostgreSQL
+    /**
+     * Initialize MySQL/PostgreSQL connection string.
+     */
+    private static function initSQL() : bool
+    {
         ($host = Config::db('host')) && self::$DSN .= "host={$host};";
         ($port = Config::db('port')) && self::$DSN .= "port={$port};";
         ($db = Config::db('db'))     && self::$DSN .= "dbname={$db};";
-        self::$DSN .= ($driver === DBDriver::PostgreSQL)
+        
+        self::$DSN .= (self::$driver === DBDriver::PostgreSQL)
             ? "options='--client_encoding=UTF8'"
             : 'charset=utf8mb4';
 
@@ -107,9 +111,8 @@ Final Class DB
             throw new \LogicException('Database configuration file is missing.');
 
         // Connection parameters.
-        $user = Config::db('user');
-        $pass = Config::db('pass');
-
+        $user = null;
+        $pass = null;
         $options = [
             PDO::ATTR_CASE => PDO::CASE_NATURAL,
             PDO::ATTR_ORACLE_NULLS => PDO::NULL_NATURAL,
@@ -120,18 +123,16 @@ Final Class DB
 
         if (self::$driver === DBDriver::SQLite) {
 
-            $options[PDO::SQLITE_ATTR_OPEN_FLAGS] = PDO::SQLITE_OPEN_CREATE | PDO::SQLITE_OPEN_READWRITE;
+            $options[PDO::SQLITE_ATTR_OPEN_FLAGS] = PDO::SQLITE_OPEN_CREATE | 
+                PDO::SQLITE_OPEN_READWRITE;
 
         } else {
 
-            if ($user === null)
-                throw new \LogicException('The field "user" is not set in the 
-                    database config.');
+            $user = Config::db('user') ?? throw new \LogicException('Field 
+                "user" is not set in the database config.');
 
-            if ($pass === null)
-                throw new \LogicException('The field "pass" is not set in the 
-                    database config.');
-
+            $pass = Config::db('pass') ?? throw new \LogicException('Field 
+                "pass" is not set in the database config.');
         }
 
         // Connect.
@@ -144,9 +145,8 @@ Final Class DB
             // Suppress the exception details to prevent exposing sensitive
             // information.
             error_log("Database connection error: {$e->getMessage()}");
-
-            throw new \LogicException('Database connection error, check the 
-                logs for details.');
+            throw new \LogicException('Database connection error, check logs 
+                for details.');
 
         }
     }
@@ -156,9 +156,8 @@ Final Class DB
      */
     public static function beginTransaction() : bool
     {
-        return (self::$transactionActive)
-            ? true
-            : self::$transactionActive = self::connect()->beginTransaction();
+        return self::$transactionActive ?:
+            (self::$transactionActive = self::connect()->beginTransaction());
     }
 
     /**
@@ -166,9 +165,8 @@ Final Class DB
      */
     public static function commit() : bool
     {
-        return (!self::$transactionActive)
-            ? true
-            : !(self::$transactionActive = !self::$handler->commit());
+        return !self::$transactionActive ?:
+            !(self::$transactionActive = !self::$handler->commit());
     }
 
     /**
@@ -176,9 +174,8 @@ Final Class DB
      */
     public static function rollback() : bool
     {
-        return (!self::$transactionActive)
-            ? true
-            : self::$transactionActive = !self::$handler->rollBack();
+        return !self::$transactionActive ?:
+            (self::$transactionActive = !self::$handler->rollBack());
     }
 
     /**
@@ -287,7 +284,8 @@ Final Class DB
      */
     public static function bindMultiplePlaceholders(array $values) : self
     {
-        foreach ($values as $value) self::bindPlaceholder($value);
+        foreach ($values as $value)
+            self::bindPlaceholder($value);
 
         return self::$instance;
     }
