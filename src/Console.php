@@ -14,6 +14,67 @@ Abstract Class Console
     const INFO     = '36'; // Cyan
 
     /**
+     * Creates the CLI tool in the project root.
+     *
+     * Usage in "composer.json":
+     * 
+     *      "scripts": {
+     *          "post-install-cmd": "Val\\Console::create",
+     *      },
+     * 
+     */
+    public static function create(\Composer\Script\Event $event)
+    {
+        $vendorDir = $event->getComposer()->getConfig()->get('vendor-dir');
+        $projectRoot = dirname($vendorDir);
+        $io = $event->getIO();
+
+        // Absolute path to the CLI tool "bin/val".
+        $file = realpath(__DIR__.'/../bin/val');
+
+        // Windows OS.
+        if (DIRECTORY_SEPARATOR === '\\') {
+            
+            // Create the "val.bat" file in the project root.
+            // It will call the actual CLI tool in the "vendor/bin" directory.
+            $target = $projectRoot . DIRECTORY_SEPARATOR . 'val.bat';
+            $contents = "@ECHO OFF\r\n";
+            $contents .= "\"%~dp0\\vendor\\bin\\val.bat\" %*\r\n";
+
+            if (file_put_contents($target, $contents) !== false) {
+                $io->write("<info>Val CLI batch wrapper created at {$target}</info>");
+                return;
+            }
+
+            $io->writeError("<error>Failed to create Val CLI batch wrapper at {$target}</error>");
+            return;
+        }
+
+        // Unix-like OS.
+
+        // Create a symlink named "val" in the project root.
+        // It will point to the actual CLI tool in the "vendor/bin" directory.
+        $target = $projectRoot . DIRECTORY_SEPARATOR . 'val';
+
+        if (file_exists($target) || is_link($target)) unlink($target);
+
+        if (symlink('./vendor/bin/val', $target)) {
+            chmod($target, 0755);
+            $io->write("<info>Val CLI symlink created at {$target}</info>");
+            return;
+        }
+
+        // If symlink fails, try copying the file.
+        if (copy($file, $target)) {
+            chmod($target, 0755);
+            $io->write("<info>Val CLI copied to {$target}</info>");
+            return;
+        }
+
+        $io->writeError("<error>Failed to install Val CLI tool at {$target}</error>");
+    }
+
+    /**
      * Processes the CLI commands (CLI entry point).
      */
     public static function open() : void
