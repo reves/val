@@ -3,7 +3,6 @@
 namespace Val\App;
 
 use PDO;
-use Val\App;
 
 enum DBDriver : string
 {
@@ -258,7 +257,9 @@ Final Class DB
     /**
      * Binds multiple placeholders using sef::bind method for each placeholder.
      * The $relations parameter should represent an array of $placeholder => 
-     * $value relations. Read self::bind method documentation for details.
+     * $value relations.
+     * 
+     * @see self::bind() For details.
      */
     public static function bindMultiple(array $relations) : self
     {
@@ -280,7 +281,9 @@ Final Class DB
     /**
      * Binds the $values to multiple question mark placeholders whose index 
      * automatically increments using sef::bindPlaceholder method for each of
-     * them. Read self::bindPlaceholder method documentation for details.
+     * them.
+     * 
+     * @see self::bindPlaceholder() For details.
      */
     public static function bindMultiplePlaceholders(array $values) : self
     {

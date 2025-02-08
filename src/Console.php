@@ -2,142 +2,221 @@
 
 namespace Val;
 
+use ReflectionClass;
+
 Abstract Class Console
 {
-    // TODO: fix tab spacing
+    const TAB_SIZE =   2;  // Tab size in spaces
+    const ERROR    = '31'; // Red
+    const SUCCESS  = '32'; // Green
+    const WARNING  = '33'; // Yellow
+    const DEBUG    = '35'; // Magenta
+    const INFO     = '36'; // Cyan
 
     /**
-     * Processes the CLI commands.
+     * Processes the CLI commands (CLI entry point).
      */
     public static function open() : void
     {
-        App::run();
+        App::initDirectories(getcwd());
+
+        $argv = array_values( array_filter(
+                $_SERVER['argv'] ?? [],
+                fn($arg) => !str_starts_with($arg, '-')
+        ));
+        $command = ucfirst(strtolower($argv[1] ?? ''));
+        $subcommand = strtolower($argv[2] ?? '');
+        $argument = $argv[3] ?? null;
+
         self::println();
 
-        $argv = &$_SERVER['argv'];
-        $cmd = $argv[1] ?? null;
-
-        if (!$cmd || !preg_match('/^[a-z]+(:[a-z]+)?$/', $cmd)) {
+        // No command provided, or commands list requested.
+        if (!$command || $command === 'Help' || $command === 'List') {
             self::list();
-            return;
+            exit($command ? 0 : 2);
         }
 
-        @list($command, $method) = explode(':', $cmd);
-        $commandClass = ucfirst($command);
+        // Validate command syntax.
+        if (!preg_match('/^[a-z]+$/i', $command)) {
+            self::println("Invalid \"{$command}\" command syntax. Command must contain only letters.", self::ERROR);
+            exit(2);
+        }
 
-        if (!is_file(__DIR__."/Console/{$commandClass}.php")) {
+        // If the subcommand syntax is wrong, treat it as an argument to the 
+        // base command.
+        if ($subcommand !== '' && !preg_match('/^[a-z]+$/', $subcommand)) {
+            $argument = $subcommand;
+            $subcommand = '';
+        }
+
+        // Check if the command file exists.
+        $commandFile = __DIR__."/Console/{$command}.php";
+        $commandClass = "Val\\Console\\{$command}";
+
+        if (!is_file($commandFile)) {
+            $command = lcfirst($command);
+            self::println("Command \"{$command}\" not found.", self::ERROR, 2);
             self::list();
-            return;
+            exit(127);
         }
 
-        $commandClass = "Val\\Console\\{$commandClass}";
-        $arg = $argv[2] ?? null;
-
-        if (!$method) {
-            $commandClass::handle($arg);
-            return;
+        // If no subcommand is provided, execute the command.
+        if ($subcommand === '') {
+            exit((int)!$commandClass::handle($argument));
         }
 
-        if (!method_exists($commandClass, $method)) {
-            self::list();
-            return;
+        // If the subcommand's corresponding method doesn't exist, treat it as 
+        // an argument to the base command.
+        if (!method_exists($commandClass, $subcommand)) {
+            $argument = $subcommand;
+            $subcommand = '';
+            exit((int)!$commandClass::handle($argument));
         }
 
-        $commandClass::$method($arg);
+        // Execute the subcommand.
+        exit((int)!$commandClass::$subcommand($argument));
     }
 
     /**
-     * Lists the currently available commands.
+     * Lists available commands.
      */
     public static function list() : void
     {
-        $files = array_filter(
-            scandir(__DIR__.'/Console'), 
-            fn($v) => preg_match('/^[A-Z][a-z]*\.php$/', $v)
+        $fileNames = array_filter(
+            scandir(__DIR__.'/Console'),
+            fn($name) => preg_match('/^[a-z]+\.php$/i', $name)
         );
 
-        if (!$files) {
-            self::println('No available commands.', '33');
-            return;
-        }
+        $commands = [];
+        $lengths = ['command' => 0, 'subcommand' => 0, 'argument' => 0];
 
-        self::println('Available commands:', '33');
+        // Get commands and their arguments.
+        foreach ($fileNames as $name) {
+            $commandClass = str_replace('.php', '', $name);
+            $reflector = new ReflectionClass("Val\\Console\\{$commandClass}");
+            $command = strtolower($commandClass);
+            $commandDoc = $reflector->getMethod('handle')->getDocComment();
+            $lengths['command'] = max($lengths['command'], strlen($command));
 
-        $commandsMethods = [];
+            $commands[$command] = [
+                'description' => self::parseDescription($commandDoc),
+                'argument' => self::parseArgument($commandDoc),
+                'subcommands' => [],
+            ];
 
-        foreach ($files as $fileName) {
-
-            $fileName = str_replace('.php', '', $fileName);
-            $command = strtolower($fileName);
-            $reflector = new \ReflectionClass("Val\\Console\\{$fileName}");
-
-            self::print("  $command\t\t\t", '32');
-            self::println(self::getDescription($reflector->getMethod('handle')->getDocComment()));
-
-            $commandsMethods[$command] = [];
-
+            // Get subcommands and their arguments.
             foreach ($reflector->getMethods() as $method) {
+                $name = strtolower($method->name);
+                if (!$method->isPublic() || $name[0] == '_' || $name == 'handle') continue;
 
-                if (!$method->isPublic())
-                    continue;
+                $commandDoc = $method->getDocComment();
+                $argument = self::parseArgument($commandDoc);
+                $lengths['subcommand'] = max($lengths['subcommand'], strlen($name));
+                $lengths['argument'] = $argument
+                    ? max($lengths['argument'], strlen($argument))
+                    : $lengths['argument'];
 
-                if ($method->name == 'handle')
-                    continue;
-
-                if ($method->name[0] == '_')
-                    continue;
-
-                $commandsMethods[$command][] = [
-                    'name' => $method->name,
-                    'description' => self::getDescription($method->getDocComment())
+                $commands[$command]['subcommands'][$name] = [
+                    'description' => self::parseDescription($commandDoc),
+                    'argument' => $argument,
                 ];
             }
         }
 
-        if (!$commandsMethods) {
-            
-            self::println();
-            return;
-        }
+        // Print usage, commands and their arguments.
+        self::println('Usage:', self::WARNING);
+        self::print('val command [subcommand] [');
+        self::print('<argument>', '3');
+        self::println(']', count: 2);
+        self::println('Commands:', self::WARNING);
 
-        foreach ($commandsMethods as $command => $methods) {
+        foreach ($commands as $command => $data) {
+            $argument = $data['argument'];
+            $padding = $lengths['command'] - strlen($command)
+                + $lengths['subcommand']
+                + $lengths['argument'] - ($argument ? strlen($argument) + 3 : 0) 
+                + 3 + self::TAB_SIZE;
 
-            if (!$methods)
-                continue;
-            
-            self::println();
-            self::println($command, '33');
+            self::print($command);
+            self::print($argument ? " <{$argument}>" : '', '3');
+            self::println(str_repeat(' ', $padding) . $data['description'], self::INFO);
 
-            foreach ($methods as $method) {
-                self::print("  {$command}:{$method['name']}\t\t", '32');
-                self::println($method['description']);
+            // Print subcommands and their arguments.
+            foreach ($data['subcommands'] as $subcommand => $subData) {
+                $argument = $subData['argument'];
+                $padding = $lengths['command'] - strlen($command) 
+                    + $lengths['subcommand'] - strlen($subcommand) 
+                    + $lengths['argument'] - ($argument ? strlen($argument) + 3 : 0) 
+                    + 2 + self::TAB_SIZE;
+
+                self::print("{$command} {$subcommand}");
+                self::print($argument ? " <{$argument}>" : '', '3');
+                self::println(str_repeat(' ', $padding) . $subData['description'], self::INFO);
             }
+
+            if (next($commands)) self::println();
         }
     }
 
     /**
-     * Parses the description from a doc comment.
+     * Parses the command description from a doc comment.
      */
-    protected static function getDescription(string|bool $docComment) : string
+    protected static function parseDescription(string|bool $docComment) : string
     {
-        return $docComment ? preg_replace('/\s{2,}/', ' ', substr(str_replace(["\t", PHP_EOL.' *'], '', $docComment), 4, -1)) : '';
+        if (!$docComment) return '';
+        $result = substr($docComment, 3, -1);
+        $result = preg_replace('/\*|@.*/', '', $result);
+        return trim(preg_replace('/\s+/', ' ', $result));
     }
 
     /**
-     * Outputs the text.
+     * Parses the argument name from a doc comment.
      */
-    public static function print(string $text, ?string $color = null)
+    protected static function parseArgument(string|bool $docComment) : string
     {
+        if (!$docComment) return null;
+        $result = substr($docComment, 3);
+        $result = str_replace(['*', PHP_EOL], '', $result);
+        preg_match('/@param.*?\$(\w+)/i', $result, $matches);
+        return $matches[1] ?? '';
+    }
+
+    /**
+     * Outputs the text with optional formatting.
+     */
+    public static function print(string $text, ?string $color = null) : void
+    {
+        if (getenv('NO_COLOR')) $color = false; // https://no-color.org/
         echo $color ? "\033[{$color}m{$text}\033[0m" : $text;
     }
 
     /**
-     * Outputs the text and a new line.
+     * Outputs the text with optional formatting and adds one or more new
+     * lines.
      */
-    public static function println(?string $text = null, ?string $color = null, int $count = 1)
+    public static function println(?string $text = null, ?string $color = null, int $count = 1) : void
     {
         $text && self::print($text, $color);
-        for ($i=0; $i<$count; $i++) echo PHP_EOL;
+        echo str_repeat(PHP_EOL, $count);
+    }
+
+    /**
+     * Asks the user for confirmation.
+     */
+    public static function getUserConfirmation() : bool
+    {
+        $argv = $_SERVER['argv'] ?? [];
+
+        if (in_array('-y', $argv) || in_array('--yes', $argv)) {
+            Console::println('Auto answer: y', Console::INFO, 2);
+            return true;
+        }
+
+        $handle = fopen('php://stdin', 'r');
+        $response = trim(fgets($handle));
+        fclose($handle);
+
+        return in_array(strtolower($response), ['y', 'yes']);
     }
 
 }

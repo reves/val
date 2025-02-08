@@ -5,272 +5,267 @@ namespace Val\Console;
 use Val\{App, Console};
 use Val\App\Renderer;
 
-// TODO: add gitignore
-// TODO: add config/env.php , config/env.dev.php
-// TODO: move app key to config/env.php and set Config::env('key') to config/app.php
-
 Abstract Class Create
 {
-    // TODO: preference questions
-
+    const DIR_CREATE = __DIR__.'/create';
     const CHMOD_FOLDER	= 0755;
     const CHMOD_FILE	= 0644;
 
     /**
-     * Create base files for the application
+     * Creates all the necessary files for the app.
      */
-    public static function handle()
+    public static function handle() : bool
     {
-        if (!self::createDirectory(APP::$DIR_PUBLIC)) {
+        Console::println('Creating the main application files:', count: 2);
 
-            return;
+        // Create the public directory and its files.
+        if (self::createDirectory(APP::$DIR_PUBLIC)) {
+
+            self::createFile(
+                App::$DIR_PUBLIC.'/index.php',
+                self::DIR_CREATE.'/public/index.example.php'
+            );
+
+            self::createFile(
+                App::$DIR_PUBLIC.'/.htaccess',
+                self::DIR_CREATE.'/public/example.htaccess'
+            );
         }
 
-        $indexFilePath = App::$DIR_PUBLIC . '/index.php';
-        $htaccessFilePath = App::$DIR_PUBLIC . '/.htaccess';
+        // Create the config files.
+        self::config('env', ['key' => self::_generateAppKey()]);
+        self::config('envdev', ['key' => self::_generateAppKey()]);
+        self::config('app');
+        self::config('db');
+        self::config('auth');
 
-        if (is_file($indexFilePath) && is_file($htaccessFilePath)) {
+        // Create the migration file for the sessions table.
+        glob(APP::$DIR_MIGRATIONS.'/*_CreateSessionsTable.php')
+            ? Console::println('The "CreateSessionsTable" migration file already exists, skipping...', Console::DEBUG, 2)
+            : self::migration('CreateSessionsTable');
 
-            Console::println('All the base files for the application already exist.');
-            return;
-        }
+        // Create the .gitignore file.
+        self::createFile(
+            APP::$DIR_ROOT.'/.gitignore',
+            self::DIR_CREATE.'/example.gitignore'
+        );
 
-        self::createFile($indexFilePath, 'public/index.php.example');
-        self::createFile($htaccessFilePath, 'public/.htaccess.example');
+        return true;
     }
 
     /**
-     * Generate a new application key
+     * Creates a config.
+     * 
+     * @param $name The name of the config file to create.
+     */
+    public static function config(?string $name = null, ?array $bindings = null) : bool
+    {
+        $name ??= 'config';
+
+        // Validate the config file name.
+        if (!preg_match('/^[a-z]+$/', $name = strtolower($name))) {
+            Console::println("Invalid config file name \"{$name}\": must contain only letters.", Console::ERROR);
+            return false;
+        }
+
+        if ($name === 'envdev') $name = 'env.dev'; // special case
+
+        // Create the config directory.
+        if (!self::createDirectory(APP::$DIR_CONFIG))
+            return false;
+
+        // Create the config file.
+        $path = APP::$DIR_CONFIG."/{$name}.php";
+
+        if (is_file($path)) {
+            Console::println("The \"{$name}.php\" config file already exists, skipping...", Console::DEBUG, 2);
+            return true;
+        }
+
+        $templatesPath = self::DIR_CREATE.'/config';
+        $templatePath = $templatesPath . "/{$name}.example.php";
+        $templatePath = is_file($templatePath)
+            ? $templatePath
+            : "{$templatesPath}/config.example.php";
+
+        return self::createFile($path, $templatePath, $bindings);
+    }
+
+    /**
+     * Creates an API endpoint.
+     * 
+     * @param $name The name of the API endpoint to create.
+     */
+    public static function api(?string $name = null) : bool
+    {
+        $name ??= 'test';
+
+        // Validate the API class file name.
+        if (!preg_match('/^[a-z]+$/i', $name = ucfirst(strtolower($name)))) {
+            Console::println("Invalid API class file name \"{$name}\": must contain only letters.", Console::ERROR);
+            return false;
+        }
+
+        // Create the api directory.
+        if (!self::createDirectory(APP::$DIR_API))
+            return false;
+
+        // Create the API endpoint class file.
+        $path = APP::$DIR_API."/{$name}.php";
+
+        if (is_file($path)) {
+            Console::println("The \"{$name}.php\" API endpoint class file already exists, skipping...", Console::DEBUG, 2);
+            return true;
+        }
+
+        $templatePath = self::DIR_CREATE.'/api/Endpoint.example.php';
+        return self::createFile($path, $templatePath, ['name' => $name]);
+    }
+
+    /**
+     * Creates a migration.
+     * 
+     * @param $name The name of the migration to create.
+     */
+    public static function migration(?string $name = null) : bool
+    {
+        $name ??= 'NewMigration';
+
+        // Validate the migration class name.
+        if (!preg_match('/^[a-z]+$/i', $name = ucfirst($name))) {
+            Console::println("Invalid migration class name \"{$name}\": must contain only letters.", Console::ERROR);
+            return false;
+        }
+
+        // Create the migrations directory.
+        if (!self::createDirectory(APP::$DIR_MIGRATIONS))
+            return false;
+
+        // Calculate the version of the new migration.
+        $migrations = Migrate::_getMigrations(true);
+        $version = $migrations ? array_key_first($migrations) + 1 : 1;
+
+        // Create the migration file.
+        $path = APP::$DIR_MIGRATIONS."/{$version}_{$name}.php";
+        $templatesPath = self::DIR_CREATE.'/migrations';
+        $templatePath = $templatesPath . "/{$name}.example.php";
+        $templatePath = is_file($templatePath)
+            ? $templatePath
+            : "{$templatesPath}/Migration.example.php";
+
+        return self::createFile($path, $templatePath, ['name' => $name]);
+    }
+
+    /**
+     * Regenerates the app key in "config/env.dev.php".
      */
     public static function appkey() : bool
     {
-        $filePath = APP::$DIR_CONFIG . '/app.php';
+        $path = APP::$DIR_CONFIG.'/env.dev.php';
 
-        if (!is_file($filePath)) {
+        // Create the "env.dev.php" config if it does not exist.
+        // It will also generate the app key.
+        if (!is_file($path))
+            return self::config('envdev', ['key' => self::_generateAppKey()]);
 
-            return self::config('app');
-        }
-
-        $content = file_get_contents($filePath);
-        Console::println('Generating a new application key...');
+        // Read the config file.
+        $content = file_get_contents($path);
 
         if ($content === false) {
-
-            Console::println('Failed to read the app config file!', '31');
+            Console::println('Failed to read contents of the "env.dev.php" config file!', Console::ERROR);
             return false;
         }
 
-        $content = preg_replace("/('key'\s*=>\s*')[a-zA-Z0-9\/\+]*(')/", '${1}' . self::_generateAppKey() . '${2}', $content, 1);
+        // Regenerate the app key.
+        Console::println('Regenerating the app key in "config/env.dev.php":');
+
+        $content = preg_replace("/((['\"])key\\2\s*=>\s*(['\"])).*?(\\3)/",
+            '${1}'.self::_generateAppKey().'${4}', $content, 1);
 
         if ($content === null) {
-
-            Console::println('Failed to replace the application key! Unknown preg_replace() error.', '31');
+            Console::println('Failed to regenerate the application key: preg_replace() error.', Console::ERROR);
             return false;
         }
 
-        if (file_put_contents($filePath, $content) === false) {
-
-            Console::println('Failed to write to the app config file!', '31');
+        if (file_put_contents($path, $content) === false) {
+            Console::println('Failed to write to the "env.dev.php" config file!', Console::ERROR);
             return false;
         }
 
-        Console::println('A new application key successfully generated and replaced.', '32');
+        Console::println('The app key has been regenerated successfully.', Console::SUCCESS);
         return true;
     }
 
     /**
-     * Create a new config file
-     */
-    public static function config(?string $name) : bool
-    {
-        if ($name === null) {
-
-            Console::println('No config name specified.');
-            return false;
-        }
-
-        if (!preg_match('/^[a-z]+$/', $name = strtolower($name))) {
-
-            Console::println('Invalid config name.', '31');
-            return false;
-        }
-
-        if (!self::createDirectory(APP::$DIR_CONFIG)) {
-
-            return false;
-        }
-
-        $filePath = APP::$DIR_CONFIG . "/{$name}.php";
-
-        if (is_file($filePath)) {
-
-            Console::println("Failed to create a new config file! The config file \"{$name}.php\" already exists.", '31');
-            return false;
-        }
-
-        if ($name == 'auth' && (!is_file(APP::$DIR_CONFIG . '/db.php') || !is_file(APP::$DIR_CONFIG . '/app.php'))) {
-
-            Console::println('Failed to create a new config file! Both the "db" and "app" configs are required before "auth" is created.', '31'); // TODO: create these files automatically
-            return false;
-        }
-
-        $template = match ($name) { // TODO: scandir for matching examples
-            'app'	=> 'app.php.example',
-            'auth'	=> 'auth.php.example',
-            'db'	=> 'db.php.example',
-            'env'	=> 'env.php.example',
-            default	=> 'config.php.example'
-        };
-
-        $bindings = ($name == 'app') ? ['key' => self::_generateAppKey()] : [];
-
-        if (!self::createFile($filePath, "config/{$template}", $bindings)) {
-
-            return false;
-        }
-
-        if ($name == 'auth') {
-            
-            Console::println();
-            self::migration('CreateSessionsTable');
-        }
-
-        return true;
-    }
-
-    /**
-     * Create a new API endpoint class
-     */
-    public static function api(?string $className) : bool
-    {
-        if ($className === null) {
-            Console::println('No API endpoint class name specified.');
-            return false;
-        }
-
-        if (!preg_match('/^[A-Z][a-z]*$/', $className = ucfirst(strtolower($className)))) {
-            Console::println('Invalid API endpoint class name.', '31');
-            return false;
-        }
-
-        if (!self::createDirectory(APP::$DIR_API)) {
-
-            return false;
-        }
-
-        $filePath = APP::$DIR_API . "/{$className}.php";
-
-        if (is_file($filePath)) {
-
-            Console::println("Failed to create a new API endpoint class! The API endpoint class \"{$className}.php\" already exists.", '31');
-            return false;
-        }
-
-        return self::createFile($filePath, 'api/Endpoint.php.example', ['name' => $className]);
-    }
-
-    /**
-     * Create a new migration class
-     */
-    public static function migration(?string $className) : bool
-    {
-        if ($className === null) {
-            Console::println('No migration class name specified.');
-            return false;
-        }
-
-        if (!preg_match('/^[a-zA-Z]+$/', $className = ucfirst($className))) {
-            Console::println('Invalid migration class name.', '31');
-            return false;
-        }
-
-        if (!self::createDirectory(APP::$DIR_MIGRATIONS)) {
-
-            return false;
-        }
-
-        $files = Migrate::_getFiles(true);
-        if($files) echo $files[0];
-        $newVersion = $files ? intval(strtok($files[0], '_')) + 1 : 1;
-        $filePath = APP::$DIR_MIGRATIONS . "/{$newVersion}_{$className}.php";
-
-        $template = match ($className) { // TODO: scandir for matching examples
-            'CreateSessionsTable'	=> 'CreateSessionsTable.php.example',
-            default						=> 'Migration.php.example'
-        };
-
-        return self::createFile($filePath, "migrations/{$template}", ['name' => $className]);
-    }
-
-    /**
-     * Creates the specified directory. Attention: returns true even if the folder already 
-     * exists.
+     * Creates the specified directory if it does not exist. Returns true on
+     * success, or if the directory already exists.
      */
     protected static function createDirectory(string $path) : bool
     {
-        if (!file_exists($path)) {
+        $name = basename($path);
 
-            $name = basename($path);
-
-            Console::println("Creating the {$name} directory...");
-
-            if (!is_writable(App::$DIR_ROOT)) {
-
-                Console::println("Failed to create the {$name} directory! The root directory is not writable.", '31');
-                return false;
-            }
-
-            if (!mkdir($path, self::CHMOD_FOLDER)) {
-                
-                Console::println("Failed to create the {$name} directory!", '31');
-                return false;
-            }
-
-            Console::println("The {$name} directory successfully created.", '32', 2);
-
+        if (is_dir($path)) {
+            Console::println("The \"{$name}\" directory already exists, skipping...", Console::DEBUG, 2);
+            return true;
         }
 
+        Console::println("Creating the \"{$name}\" directory:");
+
+        if (!is_writable(App::$DIR_ROOT)) {
+            Console::println("Failed to create the \"{$name}\" directory: root directory is not writable!", Console::ERROR, 2);
+            return false;
+        }
+
+        if (!mkdir($path, self::CHMOD_FOLDER)) {
+            Console::println("Failed to create the \"{$name}\" directory!", Console::ERROR, 2);
+            return false;
+        }
+
+        Console::println("Directory \"{$name}\" successfully created.", Console::SUCCESS, 2);
         return true;
     }
 
     /**
-     * Creates the specified file. Attention: returns true even if the file already exists.
+     * Creates the specified file from the template if it does not exist.
+     * Returns true on success, or if the file already exists.
      */
-    protected static function createFile(string $path, string $template, array $bindings = []) : bool
+    protected static function createFile(string $path, string $templatePath, ?array $bindings = null) : bool
     {
-        if (!file_exists($path)) {
+        $name = basename($path);
 
-            $name = basename($path);
-            $directory = dirname($path);
-            $directoryName = basename($directory);
-
-            Console::println("Creating the {$name} file...");
-
-            if (!is_writable($directory)) {
-
-                Console::println("Failed to create the {$name} file! The {$directoryName} directory is not writable.", '31');
-                return false;
-            }
-
-            $result = file_put_contents(
-                $path,
-                Renderer::from(__DIR__ . '/create/' . dirname($template))
-                    ->load(basename($template), false)
-                    ->bindMultiple($bindings)
-                    ->getContent()
-            );
-
-            if ($result === false) {
-
-                Console::println("Failed to create the {$name} file!", '31');
-                return false;
-            }
-
-            chmod($path, self::CHMOD_FILE);
-            Console::println("The {$name} file successfully created in the {$directoryName} directory.", '32', 2);
-
+        if (is_file($path)) {
+            Console::println("The \"{$name}\" file already exists, skipping...", Console::DEBUG, 2);
+            return true;
         }
 
+        Console::println("Creating the \"{$name}\" file:");
+
+        $directoryPath = dirname($path);
+        $directoryName = basename($directoryPath);
+
+        if (!is_writable($directoryPath)) {
+            Console::println("Failed to create the \"{$name}\" file: the \"{$directoryName}\" directory is not writable!", Console::ERROR, 2);
+            return false;
+        }
+
+        Renderer::init();
+        $content = Renderer::setPath(dirname($templatePath))
+            ->load(basename($templatePath), false)
+            ->bindMultiple($bindings ?? [])
+            ->getContent();
+        $result = file_put_contents($path, $content);
+
+        if ($result === false) {
+            Console::println("Failed to create the \"{$name}\" file!", Console::ERROR, 2);
+            return false;
+        }
+
+        if (!chmod($path, self::CHMOD_FILE)) {
+            Console::println("Failed to set the \"{$name}\" file permissions!", Console::ERROR, 2);
+            return false;
+        }
+
+        Console::println("File \"{$directoryName}/{$name}\" successfully created.", Console::SUCCESS, 2);
         return true;
     }
 
@@ -279,7 +274,10 @@ Abstract Class Create
      */
     public static function _generateAppKey() : string
     {
-        return \sodium_bin2base64(\sodium_crypto_secretbox_keygen(), \SODIUM_BASE64_VARIANT_ORIGINAL_NO_PADDING);
+        return \sodium_bin2base64(
+            \sodium_crypto_secretbox_keygen(),
+            \SODIUM_BASE64_VARIANT_ORIGINAL_NO_PADDING
+        );
     }
 
 }

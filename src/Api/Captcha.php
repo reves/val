@@ -10,8 +10,8 @@ Abstract Class Captcha
      * Verifies the Cloudflare's Turnstile response token and returns an
      * associative array of response data, or null in case of an error.
      * 
-     * See response description:
-     *  https://developers.cloudflare.com/turnstile/get-started/server-side-validation/
+     * @link https://developers.cloudflare.com/turnstile/get-started/server-side-validation/
+     * Response documentation.
      */
     public static function Turnstile(string $secret, string $response) : ?array
     {
@@ -26,8 +26,8 @@ Abstract Class Captcha
      * Verifies the hCaptcha response token and returns an
      * associative array of response data, or null in case of an error.
      * 
-     * See response description:
-     *  https://docs.hcaptcha.com/#verify-the-user-response-server-side
+     * @link https://docs.hcaptcha.com/#verify-the-user-response-server-side
+     * Response documentation.
      */
     public static function hCaptcha(string $secret, string $response, ?string $sitekey = null) : ?array
     {
@@ -43,8 +43,8 @@ Abstract Class Captcha
      * Verifies the Google's reCAPTCHA v3 response token and returns an
      * associative array of response data, or null in case of an error.
      * 
-     * See response description:
-     *  https://developers.google.com/recaptcha/docs/v3#site_verify_response
+     * @link https://developers.google.com/recaptcha/docs/v3#site_verify_response
+     * Response documentation.
      */
     public static function reCAPTCHA(string $secret, string $response) : ?array
     {

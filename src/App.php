@@ -36,23 +36,13 @@ Abstract Class App
 
         self::$running = true;
 
-        // Directories
-        self::$DIR_ROOT       = $rootPath ?? ($_SERVER['DOCUMENT_ROOT']
-                                        ? ($_SERVER['DOCUMENT_ROOT'] . '/..')
-                                        : getcwd());
-        self::$DIR_PUBLIC     = self::$DIR_ROOT . '/public';
-        self::$DIR_CONFIG     = self::$DIR_ROOT . '/config';
-        self::$DIR_API        = self::$DIR_ROOT . '/api';
-        self::$DIR_VIEW       = self::$DIR_ROOT . '/view';
-        self::$DIR_MIGRATIONS = self::$DIR_ROOT . '/migrations';
+        // Initialize directories constants.
+        self::initDirectories($rootPath);
 
-        // Error reporting
-        if (self::isProd()) {
+        // Error reporting.
+        ini_set('display_errors', !self::isProd());
 
-            ini_set('display_errors', 0);
-        }
-
-        // Default timezone
+        // Default timezone.
         date_default_timezone_set('UTC');
 
         // Common headers
@@ -61,7 +51,7 @@ Abstract Class App
         header('X-Content-Type-Options: nosniff');
         header('X-Frame-Options: DENY');
 
-        // Initialize modules
+        // Initialize modules.
         Lang::init();
         CSRF::init();
         DB::init();
@@ -70,15 +60,14 @@ Abstract Class App
 
         if (App::isApiRequest()) {
 
-            // API specific headers
+            // API specific headers.
             header('Content-type: application/json; charset=utf-8');
 
             Api::_load();
-
             return;
         }
 
-        // View specific headers
+        // View specific headers.
         header('Content-Type: text/html; charset=utf-8');
         header('Referrer-Policy: origin, strict-origin');
         header('X-XSS-Protection: 1; mode=block');
@@ -89,6 +78,19 @@ Abstract Class App
             // in the view function.
             $view();
         }
+    }
+
+    /**
+     * Initializes application directories.
+     */
+    public static function initDirectories(?string $rootPath = null) : void
+    {
+        self::$DIR_ROOT       = $rootPath ? rtrim($rootPath, '/') : dirname(getcwd());
+        self::$DIR_PUBLIC     = self::$DIR_ROOT.'/public';
+        self::$DIR_CONFIG     = self::$DIR_ROOT.'/config';
+        self::$DIR_API        = self::$DIR_ROOT.'/api';
+        self::$DIR_VIEW       = self::$DIR_ROOT.'/view';
+        self::$DIR_MIGRATIONS = self::$DIR_ROOT.'/migrations';
     }
 
     /**
@@ -106,13 +108,10 @@ Abstract Class App
      */
     public static function isProd() : bool
     {
-        if (self::$isProd !== null)
-            return self::$isProd; // cached value
-        
-        $env = Config::env() ?: throw new \LogicException('Environment 
-            configuration file is missing.');
-
-        return self::$isProd = !isset($env['_DEV_']);
+        return self::$isProd ??= !(
+            Config::env()['_DEV_'] ?? throw new \LogicException('Environment 
+            configuration file is missing.')
+        );
     }
 
     /**
@@ -128,6 +127,8 @@ Abstract Class App
      * Verifies that the contents of a variable can be called as a function
      * from outside the API object context (to check if any of the API's method
      * is public, or if the API object itself is callable).
+     * 
+     * @internal
      */
     public static function _isCallable($var) : bool
     {

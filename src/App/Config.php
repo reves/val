@@ -28,7 +28,7 @@ Abstract Class Config
 
         return $arguments
             ? (self::$configs[$name][$arguments[0]] ?? null)
-            : self::$configs[$name]; // No field specified, return the whole config.
+            : (self::$configs[$name] ?? null); // No field specified, return the whole config.
     }
 
     /**

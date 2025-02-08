@@ -16,8 +16,8 @@ Abstract Class TwoFactorAuth
      *   $appName: 'My App', 'Example.com', 'app'
      *   $accountName: 'john@doe.com', 'john_doe', 'John Doe'
      * 
-     * Info:
-     * https://github.com/google/google-authenticator/wiki/Key-Uri-Format
+     * @see https://github.com/google/google-authenticator/wiki/Key-Uri-Format
+     * For more information.
      */
     public static function createURI(string $secretKey, string $appName, string $accountName) : string
     {

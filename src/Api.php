@@ -53,6 +53,8 @@ Class Api
 
     /**
      * Loads the requested API.
+     * 
+     * @internal
      */
     final public static function _load()
     {
@@ -300,8 +302,7 @@ Class Api
      * Sends a fail response if any of the listed fields did not pass the 
      * corresponding validation (if defined).
      * 
-     * For details on how to write the validation methods, read the description 
-     * of the "required()" method.
+     * @see self::required() For details on how to write the validation methods.
      */
     final protected function optional(string|array ...$fields) : self
     {
@@ -311,8 +312,7 @@ Class Api
     /**
      * Registers the required or optional fields for the requested API methed.
      * 
-     * For details, read the descriptions of the "required()" and "optional()"
-     * methods.
+     * @see self::required() | self::optional() For details.
      */
     private function registerFields(array $fields, bool $required = false) : self
     {

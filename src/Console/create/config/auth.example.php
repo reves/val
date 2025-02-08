@@ -1,5 +1,10 @@
 <?php
 
+/**
+ * Authentication and session settings.
+ * 
+ * Config required for modules: Auth.
+ */
 return [
 
     /**

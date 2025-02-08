@@ -6,11 +6,12 @@ Abstract Class JSON
 {
     /**
      * Returns a string containing the JSON representation of the supplied data 
-     * array, or null in case of error. Detailed information on encoding 
-     * options is available at 
-     * https://riptutorial.com/php/example/2019/encoding-a-json-string.
+     * array, or null in case of error.
      * 
      * Warning (!) it is desirable data array to be associative.
+     * 
+     * @see https://riptutorial.com/php/example/2019/encoding-a-json-string 
+     * For detailed information on encoding options.
      */
     public static function encode(array $data) : ?string
     {
