@@ -18,7 +18,7 @@ return [
      * Used in "config/db.php"
      */
     'db_host' => '127.0.0.1',
-    'db_nam'  => 'database',
+    'db_name' => 'database',
     'db_user' => 'root',
     'db_pass' => '',
 

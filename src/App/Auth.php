@@ -470,10 +470,10 @@ Abstract Class Auth
             'REMOTE_ADDR'
         ];
 
-		foreach ($headers as $header) {
+        foreach ($headers as $header) {
             if (array_key_exists($header, $_SERVER))
                 return trim(strtok($_SERVER[$header], ','));
-		}
+        }
 
         return null;
     }

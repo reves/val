@@ -22,4 +22,12 @@ return [
         'en',
     ],
 
+    /**
+     * Whether to set the language code in the URL path.
+     * E.g. example.com/en, example.com/en/page.
+     * 
+     * Default: false
+     */
+    'language_in_url' => false,
+
 ];

@@ -6,7 +6,7 @@ use Val\{App, Console};
 use Val\App\{Config, DB, DBDriver};
 
 Abstract Class Migrate
-{	
+{
     /**
      * Runs migrations to the latest version.
      * 

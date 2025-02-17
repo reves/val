@@ -8,8 +8,8 @@ use Val\App\Renderer;
 Abstract Class Create
 {
     const DIR_CREATE = __DIR__.'/create';
-    const CHMOD_FOLDER	= 0755;
-    const CHMOD_FILE	= 0644;
+    const CHMOD_FOLDER = 0755;
+    const CHMOD_FILE   = 0644;
 
     /**
      * Creates all the necessary files for the app.

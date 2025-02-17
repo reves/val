@@ -24,31 +24,32 @@ Abstract Class Lang
         // Detect language code
         self::detect();
 
-        // Handle language code in the URL path.
+        // Handle language code in the URL path:
 
-        if (App::isApiRequest() || !Config::app('languages'))
+        if (App::isApiRequest() || !Config::app('language_in_url') || !Config::app('languages'))
             return;
 
-        $code = strtok($_SERVER["REQUEST_URI"] ?? '', '/');
-        $parsed = self::parse($code);
+        $URI = $_SERVER["REQUEST_URI"] ?? '/';
+        $codeInPath = strtok($URI, '/');
+        $parsed = self::parse($codeInPath);
 
-        // Language code is not present in the URL path or is invalid or is not
-        // supported.
-        if (!$parsed)
-            return;
-
-        // Parsed language code does not correspond to the detected one, so
-        // remove it from the URL path.
-        if ($parsed != self::$code) {
-            header('Location: ' . substr($_SERVER["REQUEST_URI"], strlen($code)+1), true, 302);
+        // Language code is not present in the URL path, so insert the detected 
+        // language code.
+        if ($parsed === null) {
+            header('Location: /' . self::$code . ($URI === '/' ? '' : $URI), true, 302);
             return;
         }
 
-        // Language code in the URL path is similar to the detected one, but
-        // not exact (e.g. different region), so replace it with the detected
-        // one.
-        if ($code != self::$code) {
-            header('Location: /' . $parsed . substr($_SERVER["REQUEST_URI"], strlen($code)+1), true, 302);
+        // Language code is present in the URL path, but not supported, so 
+        // replace it with the detected language code.
+        //  ||
+        // Language code in the URL path is supported, but doesn't correspond 
+        // to the detected one (user preferred), or is similar to the detected 
+        // one, but not exact (e.g. different region), so replace it with the 
+        // detected one.
+        if ($parsed === '' || $codeInPath != self::$code) {
+            header('Location: ' . substr_replace($URI, self::$code, 1, strlen($codeInPath)), true, 302);
+            return;
         }
     }
 
@@ -62,21 +63,22 @@ Abstract Class Lang
      */
     protected static function detect() : bool
     {
-        // From cookie
+        // From cookie.
         if (Cookie::isSet(self::COOKIE_NAME) &&
             self::$code = self::parse(Cookie::get(self::COOKIE_NAME))
         ) {
             return self::updateCookie();
         }
 
-        // From 'Accept-Language' header
-        if (isset($_SERVER['HTTP_ACCEPT_LANGUAGE']) && 
-            self::$code = self::parse(strtok(strtok($_SERVER['HTTP_ACCEPT_LANGUAGE'], ','), ';'))
-        ) {
-            return self::updateCookie();
+        // From 'Accept-Language' header.
+        $code = strtok($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '', ',');
+        while ($code) {
+            if (self::$code = self::parse(explode(';', $code, 2)[0])) 
+                return self::updateCookie();
+            $code = strtok(',');
         }
 
-        // Default supported language
+        // Default supported language.
         if (Config::app('languages')) {
             self::$code = Config::app('languages')[0];
             return self::updateCookie();
@@ -122,7 +124,8 @@ Abstract Class Lang
     /**
      * Returns the language code, if it has a valid format. Checks if it is
      * supported (only in case that the supported languages list is specified
-     * in the config). If the code is not valid or not supported, returns null.
+     * in the config). Returns null if the code is not valid, or en empty 
+     * string if it is not supported.
      * 
      * Valid format:
      *  <ISO 639 language code>[-<ISO 3166-1 region code>]
@@ -138,7 +141,7 @@ Abstract Class Lang
             return $code;
 
         // Check if the language is supported
-        $similar = null;
+        $similar = '';
 
         foreach (Config::app('languages') as $supportedCode) {
             // Supported language, exact match
