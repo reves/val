@@ -14,6 +14,8 @@ Abstract Class Lang
     /**
      * Detects the user preferred language. Manages the language code in the 
      * URL path.
+     * 
+     * @internal
      */
     public static function init() : void
     {

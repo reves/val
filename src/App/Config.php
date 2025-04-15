@@ -37,9 +37,10 @@ Abstract Class Config
     private static function loadConfig(string $name) : void
     {
         $path = App::$DIR_CONFIG . "/{$name}.php";
+        $isEnv = ($name === 'env');
 
         // Environment config (environment variables) requested.
-        if ($name === 'env') {
+        if ($isEnv) {
 
             // Check if the development env config file exists. If so, assign
             // this config to the "::env()" handle, as it takes precedence.
@@ -47,13 +48,16 @@ Abstract Class Config
 
             if (is_file($pathDev)) {
                 self::$configs[$name] = require $pathDev;
-                self::$configs[$name]['_DEV_'] = true; // meta data
+                self::$configs[$name]['_DEV_'] = true;
                 return;
             }
         }
 
         // Load the config file.
-        if (is_file($path)) self::$configs[$name] = require $path;
+        if (is_file($path)) {
+            self::$configs[$name] = require $path;
+            if ($isEnv) self::$configs[$name]['_DEV_'] = false;
+        }
     }
 
 }

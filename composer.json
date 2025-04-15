@@ -5,7 +5,9 @@
     "license": "MIT",
     "type": "library",
     "require": {
-        "php": "^8.3"
+        "php": "^8.3",
+        "ext-mbstring": "*",
+        "ext-sodium": "*"
     },
     "autoload": {
         "psr-4": {

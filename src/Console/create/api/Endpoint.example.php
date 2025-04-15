@@ -8,14 +8,14 @@ Final Class {name} Extends Api
     {
         $this->onlyGET();
 
-        return $this->respondData(['status' => 'OK']);
+        return $this->success(['status' => 'OK']);
     }
 
     public function ping()
     {
         $this->onlyPOST();
 
-        return $this->respondSuccess();
+        return $this->success();
     }
 
 }

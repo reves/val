@@ -40,6 +40,7 @@ Final Class DB
      * false, if the database config is missing.
      * 
      * @throws \LogicException
+     * @internal
      */
     public static function init() : bool
     {
@@ -211,7 +212,16 @@ Final Class DB
     {
         return self::$handler->lastInsertId();
     }
-    
+
+    /**
+     * Returns the number of rows affected by the last DELETE, INSERT, or 
+     * UPDATE statement. (!) Not recommended to use with SELECT statements.
+     */
+    public static function rowCount() : int
+    {
+        return self::$statement->rowCount();
+    }
+
     /**
      * Prepares the statement for execution.
      */
@@ -221,15 +231,6 @@ Final Class DB
         self::$questionMarkPlaceholderIndex = 0;
 
         return self::$instance;
-    }
-
-    /**
-     * Executes the prepared statement. All the $parameters values are treated
-     * as PDO::PARAM_STR. Returns true on success.
-     */
-    public static function execute(?array $parameters = null) : bool
-    {
-        return self::$statement->execute($parameters);
     }
 
     /**
@@ -255,21 +256,6 @@ Final Class DB
     }
 
     /**
-     * Binds multiple placeholders using sef::bind method for each placeholder.
-     * The $relations parameter should represent an array of $placeholder => 
-     * $value relations.
-     * 
-     * @see self::bind() For details.
-     */
-    public static function bindMultiple(array $relations) : self
-    {
-        foreach ($relations as $placeholder => $value)
-            self::bind($placeholder, $value);
-
-        return self::$instance;
-    }
-
-    /**
      * Binds the $value to a question mark placeholder whose index
      * automatically increments.
      */
@@ -279,18 +265,53 @@ Final Class DB
     }
 
     /**
-     * Binds the $values to multiple question mark placeholders whose index 
-     * automatically increments using sef::bindPlaceholder method for each of
-     * them.
+     * Binds multiple placeholders, depending on $relations array structure:
+     *  - If the $relations array has the key "0", then uses the
+     *      self::bindPlaceholder method.
+     *  - If the $relations array is a list or starts at index 1, uses the
+     *      self::bind method.
      * 
-     * @see self::bindPlaceholder() For details.
+     * @see self::bind() and self::bindPlaceholder() For details.
      */
-    public static function bindMultiplePlaceholders(array $values) : self
+    public static function bindMultiple(array $relations) : self
     {
-        foreach ($values as $value)
-            self::bindPlaceholder($value);
+        if (array_key_exists(0, $relations)) {
+            foreach ($relations as $placeholder => $value)
+                self::bindPlaceholder($value);
+        } else {
+            foreach ($relations as $placeholder => $value)
+                self::bind($placeholder, $value);
+        }
 
         return self::$instance;
+    }
+
+    /**
+     * Executes the prepared statement. Returns true on success.
+     */
+    public static function execute(?array $relations = null) : bool
+    {
+        if ($relations) self::bindMultiple($relations);
+
+        return self::$statement->execute();
+    }
+
+    /**
+     * Returns the array containing first row of the result set rows. Returns
+     * null in case of an empty result or an error.
+     * 
+     * Result example: (using PDO::FETCH_ASSOC)
+     * 
+     *  ["id" => 1, "name" => "banana"]
+     * 
+     */
+    public static function single(?array $relations = null) : ?array
+    {
+        self::execute($relations);
+        $row = self::$statement->fetch();
+        self::$statement->closeCursor();
+
+        return $row ?: null;
     }
 
     /**
@@ -304,39 +325,19 @@ Final Class DB
      *  ]
      * 
      */
-    public static function resultset(?array $parameters = null) : array
+    public static function resultset(?array $relations = null) : array
     {
-        self::execute($parameters);
+        self::execute($relations);
 
         return self::$statement->fetchAll();
     }
 
     /**
-     * Returns the array containing first row of the result set rows. Returns
-     * null in case of an empty result or an error.
-     * 
-     * Result example: (using PDO::FETCH_ASSOC)
-     * 
-     *  ["id" => 1, "name" => "banana"]
-     * 
+     * Generates a string with $count question mark placeholders in total.
      */
-    public static function single(?array $parameters = null) : ?array
+    public static function generatePlaceholders(int $count) : string
     {
-        self::execute($parameters);
-        $row = self::$statement->fetch();
-        self::$statement->closeCursor();
-
-        return $row ?: null;
-    }
-
-    /**
-     * Returns the number of rows affected by the last SQL statement.
-     * Warning(!) when PDO::MYSQL_ATTR_FOUND_ROWS is set to true, it returns
-     * the number of found (matched) rows, not the number of changed rows.
-     */
-    public static function rowCount() : int
-    {
-        return self::$statement->rowCount();
+        return rtrim(str_repeat('?,', $count), ',');
     }
 
     /**
@@ -346,14 +347,6 @@ Final Class DB
     public static function dateTime(?int $timestamp = null) : string
     {
         return date('Y-m-d H:i:s', $timestamp);
-    }
-
-    /**
-     * Generates a string with $count question mark placeholders in total.
-     */
-    public static function generatePlaceholders(int $count) : string
-    {
-        return rtrim(str_repeat('?,', $count), ',');
     }
 
     /**
@@ -367,6 +360,8 @@ Final Class DB
 
     /**
      * Closes connection on destruct.
+     * 
+     * @internal
      */
     public function __destruct()
     {

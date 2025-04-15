@@ -4,9 +4,6 @@ namespace Val;
 
 use Val\App\{Lang, CSRF, DB, Auth, Renderer, Config};
 
-/**
- * Application entry point.
- */
 Abstract Class App
 {
     // App status.
@@ -83,7 +80,7 @@ Abstract Class App
     /**
      * Initializes application directories.
      */
-    public static function initDirectories(?string $rootPath = null) : void
+    protected static function initDirectories(?string $rootPath = null) : void
     {
         self::$DIR_ROOT       = $rootPath ? rtrim($rootPath, '/') : dirname(getcwd());
         self::$DIR_PUBLIC     = self::$DIR_ROOT.'/public';

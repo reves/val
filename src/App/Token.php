@@ -2,8 +2,6 @@
 
 namespace Val\App;
 
-use DateTime;
-
 Abstract Class Token
 {
     const TIME_SECONDS = 'seconds';

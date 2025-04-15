@@ -75,14 +75,19 @@ Abstract Class TwoFactorAuth
     /**
      * Calculates the code for a given secret key.
      */
-    protected static function getCode(string $secretKey, ?int $timeSlice = null) : string
+    protected static function getCode(string $secretKey, ?float $timeSlice = null) : string
     {
         $time = pack('J', $timeSlice ?? floor(time() / self::TIME_WINDOW));
         $hash = hash_hmac('sha256', $time, self::base32Decode($secretKey), true);
         $hashpart = substr($hash, ord(substr($hash, -1)) & 0x0F, 4);
         $value = unpack('N', $hashpart)[1] & 0x7FFFFFFF;
 
-        return str_pad($value % pow(10, self::CODE_LENGTH), self::CODE_LENGTH, '0', STR_PAD_LEFT);
+        return str_pad(
+            strval($value % pow(10, self::CODE_LENGTH)),
+            self::CODE_LENGTH,
+            '0',
+            STR_PAD_LEFT
+        );
     }
 
     /**
@@ -101,7 +106,7 @@ Abstract Class TwoFactorAuth
         // Split the buffer into bytes, convert them to ASCII and add 
         // to the string.
         foreach (str_split($buffer, 8) as $byte)
-            $string .= chr(bindec(str_pad($byte, 8, '0', STR_PAD_RIGHT)));
+            $string .= chr((int)bindec(str_pad($byte, 8, '0', STR_PAD_RIGHT)));
 
         return $string;
     }

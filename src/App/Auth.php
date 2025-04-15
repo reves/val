@@ -20,6 +20,7 @@ Abstract Class Auth
      * nothing if the DB module not initialized or Auth config is missing.
      * 
      * @throws \LogicException
+     * @internal
      */
     public static function init() : void
     {

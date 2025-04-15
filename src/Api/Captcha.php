@@ -16,7 +16,7 @@ Abstract Class Captcha
     public static function Turnstile(string $secret, string $response) : ?array
     {
         return HTTP::post('https://challenges.cloudflare.com/turnstile/v0/siteverify', [
-            'secret' => $secret,
+            'secret'   => $secret,
             'response' => $response,
             'remoteip' => Auth::getIPAddress()
         ]);
@@ -32,10 +32,10 @@ Abstract Class Captcha
     public static function hCaptcha(string $secret, string $response, ?string $sitekey = null) : ?array
     {
         return HTTP::post('https://api.hcaptcha.com/siteverify', [
-            'secret' => $secret,
+            'secret'   => $secret,
             'response' => $response,
             'remoteip' => Auth::getIPAddress(),
-            'sitekey' => $sitekey
+            'sitekey'  => $sitekey
         ]);
     }
 
@@ -49,7 +49,7 @@ Abstract Class Captcha
     public static function reCAPTCHA(string $secret, string $response) : ?array
     {
         return HTTP::post('https://www.google.com/recaptcha/api/siteverify', [
-            'secret' => $secret,
+            'secret'   => $secret,
             'response' => $response,
             'remoteip' => Auth::getIPAddress()
         ]);

@@ -19,18 +19,14 @@ Class Api
     // Only an Unauthenticated user can request the API action.
     private bool $flagOnlyUnauthenticated = false;
 
-    // The specific status code and optional description which describe the 
-    // reasons why data validation failed.
-    private array $fail = [];
+    // Registered data fields and their values.
+    private array $fields = [];
 
     // List of missing but required fields.
     private array $missing = [];
 
-    // List of fields with an invalid value.
-    private array $wrong = [];
-
-    // Request data fields and their values.
-    private array $fields = [];
+    // List of fields with invalid values.
+    private array $invalid = [];
 
     /**
      * The API constructor.
@@ -56,7 +52,7 @@ Class Api
      * 
      * @internal
      */
-    final public static function _load()
+    final public static function _load() : never
     {
         $apiName = $_GET['_api'];
         $action = $_GET['_action'] ?? null;
@@ -65,22 +61,21 @@ Class Api
         $regex = '/^[a-zA-Z]{1,50}$/';
 
         if (!preg_match($regex, $apiName) || ($action && !preg_match($regex, $action)))
-            return (new Api)->respondError(404);
+            self::respond(404);
 
         // Load the API Class.
         $className = self::loadApiClass($apiName);
 
         if (!$className)
-            return (new Api)->respondError(404);
+            self::respond(404);
 
         // Call the action.
         $api = new $className;
 
         if (!$action) $api(); // The magic method "__invoke()" is the default action.
         else if (App::_isCallable([$api, $action])) $api->$action();
-        else return (new Api)->respondError(404);
 
-        $api->respondOnFail();
+        self::respond(404);
     }
 
     /**
@@ -114,6 +109,8 @@ Class Api
     /**
      * Loads the requested API Class and returns its fully qualified name, or
      * null if the class file or class definition is missing.
+     * 
+     * @internal
      */
     private static function loadApiClass(string $apiName) : ?string
     {
@@ -131,6 +128,8 @@ Class Api
 
     /**
      * Returns the namespace of the API Class file.
+     * 
+     * @internal
      */
     private static function getNamespace($file) : string
     {
@@ -158,7 +157,7 @@ Class Api
 
         if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 
-            $this->respondError(405); // Method Not Allowed
+            return $this->error(405); // Method Not Allowed
         }
 
         $this->flagOnlyGET = true;
@@ -184,12 +183,12 @@ Class Api
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
-            $this->respondError(405); // Method Not Allowed
+            return $this->error(405); // Method Not Allowed
         }
 
         if (!CSRF::tokensMatch()) {
 
-            $this->respondError(403); // Forbidden
+            return $this->error(403); // Forbidden
         }
 
         $this->flagOnlyPOST = true;
@@ -216,7 +215,7 @@ Class Api
                 throw new \LogicException('Peeking an API endpoint that allows 
                 "only Authenticated user", but the user is not authenticated.');
 
-            $this->respondError(401);
+            return $this->error(401);
         }
 
         $this->flagOnlyAuthenticated = true;
@@ -243,7 +242,7 @@ Class Api
                 throw new \LogicException('Peeking an API endpoint that allows 
                 "only Unauthenticated user", but the user is authenticated.');
             
-            $this->respondError(403);
+            return $this->error(403);
         }
 
         $this->flagOnlyUnauthenticated = true;
@@ -290,6 +289,8 @@ Class Api
      * (!) <Fieldname> - the name of the field being validated. When written 
      *     in the method name, the first letter must be capitalized (just after
      *     "validate").
+     * 
+     * @throws \LogicException - for ::peek() calls, in case of a missing field.
      */
     final protected function required(string|array ...$fields) : self
     {
@@ -302,6 +303,7 @@ Class Api
      * Sends a fail response if any of the listed fields did not pass the 
      * corresponding validation (if defined).
      * 
+     * @throws \LogicException - for ::peek() calls, in case of a missing field.
      * @see self::required() For details on how to write the validation methods.
      */
     final protected function optional(string|array ...$fields) : self
@@ -312,6 +314,8 @@ Class Api
     /**
      * Registers the required or optional fields for the requested API methed.
      * 
+     * @internal
+     * @throws \LogicException - for ::peek() calls, in case of a failed request.
      * @see self::required() | self::optional() For details.
      */
     private function registerFields(array $fields, bool $required = false) : self
@@ -354,6 +358,7 @@ Class Api
      * Registers the specified field. If the field is required but is not set,
      * then it is added to the missing fields list.
      * 
+     * @internal
      * @throws \LogicException
      */
     private function registerField(string $field, bool $required) : void
@@ -387,8 +392,10 @@ Class Api
 
     /**
      * Returns the value of the specified field.
+     * 
+     * @internal
      */
-    private function getFieldValue(string $field) : mixed
+    private function getFieldValue(string $field) : string|array|null
     {
         return match(true) {
             $this->flagOnlyGET => $_GET[$field] ?? null,
@@ -402,6 +409,7 @@ Class Api
      * Validates the specified field using the its validation method 
      * (if defined).
      * 
+     * @internal
      * @throws \LogicException
      */
     private function validateField(string $field, ?string $firstField = null) : void
@@ -414,8 +422,8 @@ Class Api
         $method = 'validate' . ucfirst($firstField ?? $field);
 
         if (method_exists($this, $method)) {
-
-            $this->$method($value);
+            $result = $this->$method($value);
+            if (isset($result)) $this->setInvalid($field, ...(array)$result);
             return;
         }
 
@@ -430,7 +438,7 @@ Class Api
      * 
      * @throws \InvalidArgumentException
      */
-    final protected function val(string $field)
+    final protected function val(string $field) : mixed
     {
         if (!array_key_exists($field, $this->fields))
             throw new \InvalidArgumentException('The "' . $field . '" field is 
@@ -441,118 +449,147 @@ Class Api
     }
 
     /**
-     * Responds to a successfult request. Sets the HTTP status code to "200 OK"
-     * and exits the application.
+     * Marks the specified field as having an invalid value. Adds it to the 
+     * fail response, with a custom status and a list of parameters to comply.
+     * 
+     * Example:
+     * 
+     *      $this->setInvalid("price", "INVALID_RANGE", [
+     *          "minValue" => 1,
+     *          "maxValue" => 10000
+     *      ]);
+     * 
      */
-    final protected function respondSuccess() : ?bool
+    final protected function setInvalid(string $field, string $status, ?array $params = null) : self
     {
-        return !!$this->respond();
+        $this->invalid[$field] = ['status' => $status];
+        if ($params) $this->invalid[$field]['params'] = $params;
+
+        return $this;
     }
 
     /**
-     * Responds with data to a successful request. Sets the HTTP status code to
-     * "200 OK", sends the data and exits the application.
+     * Sends the response with the specified status code and optional data, 
+     * then exits the application.
      * 
-     * Follow the recommended response formats (which can be combined if
-     * necessary):
-     * 
-     *  a) E.g. a single post:
-     *      ["post" => ["id" => 1, "name" => "Qwerty"]]
-     * 
-     *  b) E.g. multiple posts:
-     *      ["posts" => [
-     *          ["id" => 1, "name" => "Qw"],
-     *          ["id" => 2, "name" => "Er"], ...
-     *      ]]
-     * 
+     * @internal
      */
-    final protected function respondData(array $data) : ?array
+    private static function respond(int $code, ?array $data = null) : never
     {
-        return $this->respond($data);
-    }
-
-    /**
-     * Used for unsuccessful request processing or invalid call conditions. 
-     * Sets the HTTP status code to "500 Internal Server Error" (by default) or
-     * "4xx Client Error" (except 400) and exits the application.
-     * 
-     * @throws \InvalidArgumentException
-     * @throws \RuntimeException
-     */
-    final protected function respondError(int $code = 500) : never
-    {
-        if ($code < 401 || $code > 500)
-            throw new \InvalidArgumentException('The "int $code" parameter 
-                value must be between 401 and 500, inclusive.');
-
-        $this->respond(null, $code);
-    }
-
-    /**
-     * Responds with optional data and status code, then exits the application.
-     */
-    private function respond(?array $data = null, int $code = 200) : mixed
-    {
-        if ($this->isInternalCall) {
-
-            if ($code < 400)
-                return $data ?? true;
-
-            throw new \RuntimeException("API error with status code \"$code\".");
-        }
-
         http_response_code($code);
         if ($data) echo JSON::encode($data);
         App::exit();
     }
 
     /**
-     * Sends a response only in case there is a problem with the data provided,
-     * or if any precondition of the call has not been met. Sets the HTTP
-     * status code to "400 Bad Request", sends the response and exits the
+     * Sends a successful response, with/without data. Sets the HTTP status 
+     * code to "200 OK", sends the JSON response (if any data) and exits the 
      * application.
      * 
-     * The response format can be one of the following or a combination of
+     * For ::peek() calls, returns the $data or `true` if no data.
+     * 
+     * Example response formats based on supplied $data:
+     * 
+     *  a) Single post:
+     * 
+     *      $data = ["id" => 1, "name" => "Qwerty"];
+     * 
+     *      Resulting response (JSON):
+     *      {"id": 1, "name": "Qwerty"}
+     * 
+     *  b) Multiple posts:
+     * 
+     *      $data = [
+     *          ["id" => 1, "name" => "Qw"],
+     *          ["id" => 2, "name" => "Er"],
+     *      ];
+     * 
+     *      Resulting response:
+     *      [
+     *          {"id": 1, "name": "Qw"},
+     *          {"id": 2, "name": "Er"}
+     *      ]
+     * 
+     */
+    final protected function success(?array $data = null) : array|bool
+    {
+        if ($this->isInternalCall)
+            return $data ?? true;
+
+        return self::respond(200, $data);
+    }
+
+    /**
+     * Sends an error response. Sets the HTTP status code to "500 Internal 
+     * Server Error" by default or to the specified $code of "4xx Client Error" 
+     * and exits the application.
+     * 
+     * For ::peek() calls, throws a \RuntimeException.
+     * 
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     */
+    final protected function error(int $code = 500, ?string $status = null) : never
+    {
+        if ($code < 400 || $code > 500)
+            throw new \InvalidArgumentException('The "int $code" parameter 
+                value must be between 400 and 500, inclusive.');
+
+        if ($this->isInternalCall)
+            throw new \RuntimeException("API error with status code \"$code\""
+                . $status ? ": $status." : ".");
+
+        self::respond($code, $status ? ['status' => $status] : null);
+    }
+
+    /**
+     * Sends a response only in case there are missing fields or fields with 
+     * invalid data. Sets the HTTP status code to "400 Bad Request", sends the 
+     * response and exits the application.
+     * 
+     * The response format can be one of the following OR A COMBINATION of
      * them:
      * 
-     *  a) From setFail() method:
-     *      ['fail' => [
-     *          'status' => "EXISTING_USERNAME",
-     *          'description' => "The username already exists."
-     *     ]]
+     *  a) From setInvalid() method:
+     *      {
+     *          "invalid": {
+     *              "price": {
+     *                  "status": "CUSTOM_STATUS_CODE or message",
+     *                  "params": {"minValue": 1}
+     *              }
+     *          }
+     *      }
      * 
-     *  b) From setWrong() method:
-     *      ['wrong' => [
-     *          "price" => [
-     *              'status' => "custom_status_code",
-     *              'params' => ["minValue" => 1]
-     *         ],
-     *     ]]
+     *  b) A list of missing but required fields, specified in the required()
+     *  method ((!) Missing fields are hidden in production env):
+     *      {
+     *          "missing": ["title", "url", "notes"]
+     *      }
      * 
-     *  c) A list of missing but required fields, specified in the required()
-     *  method:
-     *      ['missing' => ["title", "url", "notes"]]
-     * 
+     * @internal
      * @throws \LogicException
      */
-    final protected function respondOnFail() : self
+    private function respondOnFail() : self
     {
         $response = [];
-
-        // Set the fail status of the request.
-        if ($this->fail) $response['fail'] = $this->fail;
-
-        // List fields that didn't pass validation (if any).
-        if ($this->wrong) $response['wrong'] = $this->wrong;
 
         // List missing fields (if any).
         if ($this->missing) {
 
             // The missing fields are hidden in the production.
-            if (!App::isProd()) $response['missing'] = $this->missing;
-            else $response['fail'] ??= ['status' => 'Invalid request.'];
+            if (App::isProd()) {
 
+                if ($this->isInternalCall)
+                    throw new \LogicException('Failed API peek: invalid request.');
+
+                return $this->error(400, 'INVALID_REQUEST');
+            }
+
+            $response['missing'] = $this->missing;
         }
+
+        // List fields that didn't pass validation (if any).
+        if ($this->invalid) $response['invalid'] = $this->invalid;
 
         if (!$response)
             return $this;
@@ -560,46 +597,7 @@ Class Api
         if ($this->isInternalCall)
             throw new \LogicException('Failed API peek: ' . JSON::encode($response));
 
-        http_response_code(400);
-        echo JSON::encode($response);
-        App::exit();
-    }
-
-    /**
-     * Sets a custom status string and an optional description which describe
-     * the reasons why data validation failed for the current request.
-     * 
-     * Example:
-     * 
-     *      $this->setFail("EXISTING_USERNAME", "Username already exists.");
-     * 
-     */
-    final protected function setFail(string $status, ?string $description = null) : self
-    {
-        $this->fail = ['status' => $status];
-        if ($description) $this->fail['description'] = $description;
-
-        return $this;
-    }
-
-    /**
-     * Sets a custom status string and a list of mandatory parameters, for the
-     * specified field, whose value is not valid.
-     * 
-     * Example:
-     * 
-     *      $this->setWrong("price", "INVALID_PRICE", [
-     *          "minValue" => 1,
-     *          "maxValue" => 10000
-     *      ]);
-     * 
-     */
-    final protected function setWrong(string $field, string $status, ?array $params = null) : self
-    {
-        $this->wrong[$field] = ['status' => $status];
-        if ($params) $this->wrong[$field]['params'] = $params;
-
-        return $this;
+        self::respond(400, $response);
     }
 
 }

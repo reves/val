@@ -27,6 +27,8 @@ Final Class Renderer
 
     /**
      * Initializes the Renderer module.
+     * 
+     * @internal
      */
     public static function init() : void
     {
@@ -99,7 +101,7 @@ Final Class Renderer
     /**
      * Registers the block so makes it visible.
      */
-    public static function reveal($block) : self
+    public static function reveal(string $block) : self
     {
         self::$blocks[] = $block;
 
@@ -135,11 +137,13 @@ Final Class Renderer
     }
 
     /**
-     * Minifies the template content.
+     * Minifies the template content by removing the following characters:
+     *  - [\r\n\t] 1+
+     *  - <space> 2+
+     *  - HTML comments
      */
     protected static function minify(string $template) : string
     {   
-        // Remove: "\r\n\t" 1+  |   "space" 2+  |   HTML comments
         return self::$minify
             ? preg_replace('/([\r\n\t]+)|([ ]{2,})|(<!--.*?-->)/', '', $template)
             : $template;

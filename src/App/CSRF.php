@@ -9,6 +9,8 @@ Abstract Class CSRF
     /**
      * Sets the CSRF token cookie if not set. Does nothing, if the app config
      * is missing.
+     * 
+     * @internal
      */
     public static function init() : void
     {
@@ -44,6 +46,8 @@ Abstract Class CSRF
     /**
      * Returns true if the CSRF token from the cookie matches the CSRF token
      * from the HTTP header, otherwise returns false.
+     * 
+     * @internal
      */
     public static function tokensMatch() : bool
     {
