@@ -75,7 +75,8 @@ Class Api
         if (!$action) $api(); // The magic method "__invoke()" is the default action.
         else if (App::_isCallable([$api, $action])) $api->$action();
 
-        self::respond(404);
+        $api->respondOnFail(); // when returned with $this->setInvalid()
+        self::respond(404); // when empty action method or simply returned
     }
 
     /**
